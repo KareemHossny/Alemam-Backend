@@ -27,6 +27,9 @@ app.use(cors({
     "http://localhost:3000", 
     "http://localhost:3001", 
     "http://localhost:3002",
+    "https://alemam-admin.vercel.app",
+    "https://alemam-engineer.vercel.app",
+    "https://alemam-supervisor.vercel.app",
   ],
   credentials: false
 }));
