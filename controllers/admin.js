@@ -193,7 +193,9 @@ exports.updateProject = async (req, res) => {
 // Delete Project
 exports.deleteProject = async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.id; 
+    
+    console.log('🗑️ Deleting project with ID:', projectId);
 
     // 1. البحث عن المشروع والتأكد من وجوده
     const project = await Project.findById(projectId);
@@ -227,7 +229,7 @@ exports.deleteProject = async (req, res) => {
     // 5. مسح المشروع نفسه
     await Project.findByIdAndDelete(projectId);
 
-    console.log(`🗑️ Project ${project.name} deleted successfully`);
+    console.log(`🗑️ Project "${project.name}" deleted successfully`);
     
     res.json({
       message: "Project and all related tasks deleted successfully",
