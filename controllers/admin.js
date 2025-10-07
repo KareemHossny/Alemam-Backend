@@ -193,7 +193,7 @@ exports.updateProject = async (req, res) => {
 // Delete Project
 exports.deleteProject = async (req, res) => {
   try {
-    const projectId = req.params.id; 
+    const projectId = req.params.projectId; 
     
     console.log('🗑️ Deleting project with ID:', projectId);
 
