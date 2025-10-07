@@ -2,7 +2,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Project = require("../models/Project");
-
+const DailyTask = require("../models/dailyTask");
+const MonthlyTask = require("../models/monthlyTask");
 // Admin Login
 exports.adminLogin = async (req, res) => {
   try {
@@ -162,20 +163,55 @@ exports.updateProject = async (req, res) => {
 // Delete Project
 exports.deleteProject = async (req, res) => {
   try {
-    const project = await Project.findById(req.params.id);
+    const { projectId } = req.params;
+
+    // 1. البحث عن المشروع والتأكد من وجوده
+    const project = await Project.findById(projectId);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    await Project.findByIdAndDelete(req.params.id);
-    res.json({ message: "Project deleted successfully" });
+    // 2. مسح جميع المهام اليومية المرتبطة بالمشروع
+    const dailyTasksResult = await DailyTask.deleteMany({ project: projectId });
+    console.log(`✅ Deleted ${dailyTasksResult.deletedCount} daily tasks`);
+
+    // 3. مسح جميع المهام الشهرية المرتبطة بالمشروع
+    const monthlyTasksResult = await MonthlyTask.deleteMany({ project: projectId });
+    console.log(`✅ Deleted ${monthlyTasksResult.deletedCount} monthly tasks`);
+
+    // 4. إزالة المشروع من assignedProjects للمهندسين والمشرفين
+    await User.updateMany(
+      { 
+        $or: [
+          { _id: { $in: project.engineers } },
+          { _id: { $in: project.supervisors } }
+        ]
+      },
+      { 
+        $pull: { 
+          assignedProjects: projectId 
+        } 
+      }
+    );
+
+    // 5. مسح المشروع نفسه
+    await Project.findByIdAndDelete(projectId);
+
+    console.log(`🗑️ Project ${project.name} deleted successfully`);
+    
+    res.json({
+      message: "Project and all related tasks deleted successfully",
+      deletedDailyTasks: dailyTasksResult.deletedCount,
+      deletedMonthlyTasks: monthlyTasksResult.deletedCount,
+      projectName: project.name
+    });
+
   } catch (err) {
+    console.error("Error deleting project:", err);
     res.status(500).json({ message: "Error deleting project" });
   }
 };
 
-const DailyTask = require("../models/dailyTask");
-const MonthlyTask = require("../models/monthlyTask");
 
 // Get All Daily Tasks
 exports.getAllDailyTasks = async (req, res) => {
