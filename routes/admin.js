@@ -19,6 +19,7 @@ router.delete("/users/:id", adminController.deleteUser);
 
 // Projects Management
 router.get("/projects", adminController.getAllProjects);
+router.get("/projects/:id", adminController.getProjectById);
 router.post("/projects", adminController.createProject);
 router.put("/projects/:id", adminController.updateProject);
 router.delete("/projects/:id", adminController.deleteProject);

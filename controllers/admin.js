@@ -138,12 +138,41 @@ exports.getAllProjects = async (req, res) => {
   }
 };
 
+exports.getProjectById = async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
+
+    const project = await Project.findById(projectId)
+      .populate('engineers', 'name email')
+      .populate('supervisors', 'name email');
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    res.json({ message: "Project fetched successfully", data: project });
+  } catch (err) {
+    console.error('Error fetching project:', err);
+    res.status(500).json({ message: "Error fetching project" });
+  }
+};
+
 // Update Project
 exports.updateProject = async (req, res) => {
   try {
     const { name, scopeOfWork, engineers, supervisors } = req.body;
+    const projectId = req.params.id;
 
-    const project = await Project.findById(req.params.id);
+    // تحقق من وجود الـ projectId
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
+
+    const project = await Project.findById(projectId);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
@@ -156,6 +185,7 @@ exports.updateProject = async (req, res) => {
     await project.save();
     res.json({ message: "Project updated successfully", project });
   } catch (err) {
+    console.error('Error updating project:', err);
     res.status(500).json({ message: "Error updating project" });
   }
 };
