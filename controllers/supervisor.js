@@ -196,3 +196,54 @@ exports.reviewMonthlyTask = async (req, res) => {
     res.status(500).json({ message: "Error reviewing monthly task" });
   }
 };
+
+// إضافة هذه الوظائف في supervisor controller
+exports.getDailyTaskById = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    
+    const task = await DailyTask.findById(taskId)
+      .populate("createdBy", "name email")
+      .populate("reviewedBy", "name email");
+    
+    if (!task) {
+      return res.status(404).json({ message: "Daily task not found" });
+    }
+
+    // التحقق من الصلاحية
+    const project = await Project.findById(task.project);
+    if (!project || !project.supervisors.includes(req.user.id)) {
+      return res.status(403).json({ message: "Access denied to this task" });
+    }
+
+    res.json(task);
+  } catch (err) {
+    console.error("Error fetching daily task:", err);
+    res.status(500).json({ message: "Error fetching daily task" });
+  }
+};
+
+exports.getMonthlyTaskById = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    
+    const task = await MonthlyTask.findById(taskId)
+      .populate("createdBy", "name email")
+      .populate("reviewedBy", "name email");
+    
+    if (!task) {
+      return res.status(404).json({ message: "Monthly task not found" });
+    }
+
+    // التحقق من الصلاحية
+    const project = await Project.findById(task.project);
+    if (!project || !project.supervisors.includes(req.user.id)) {
+      return res.status(403).json({ message: "Access denied to this task" });
+    }
+
+    res.json(task);
+  } catch (err) {
+    console.error("Error fetching monthly task:", err);
+    res.status(500).json({ message: "Error fetching monthly task" });
+  }
+};
