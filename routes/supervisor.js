@@ -17,12 +17,10 @@ router.get("/projects", supervisorController.getSupervisorProjects);
 
 // Daily Tasks Review
 router.get("/daily-tasks/:projectId", supervisorController.getDailyTasks);
-router.get("/daily-task/:taskId", supervisorController.getDailyTaskById);
 router.put("/daily-tasks/:taskId/review", supervisorController.reviewDailyTask);
 
 // Monthly Tasks Review
 router.get("/monthly-tasks/:projectId", supervisorController.getMonthlyTasks);
-router.get("/monthly-task/:taskId", supervisorController.getMonthlyTaskById);
 router.put("/monthly-tasks/:taskId/review", supervisorController.reviewMonthlyTask);
 
 module.exports = router;
