@@ -1,305 +1,68 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const Project = require("../models/Project");
-const DailyTask = require("../models/dailyTask");
-const MonthlyTask = require("../models/monthlyTask");
-// Admin Login
+const authService = require("../src/services/auth.service");
+const userService = require("../src/services/user.service");
+const projectService = require("../src/services/project.service");
+const taskService = require("../src/services/task.service");
+
 exports.adminLogin = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password required" });
-    }
-
-    if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-      const token = jwt.sign(
-        { role: "admin" }, 
-        process.env.JWT_SECRET, 
-        { expiresIn: "24h" }
-      );
-
-      res.json({
-        message: "Login successful",
-        token,
-        user: { role: "admin" }
-      });
-    } else {
-      res.status(401).json({ message: "Invalid credentials" });
-    }
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
+  const result = await authService.loginAdmin(req.validated.body);
+  return res.json(result);
 };
 
-// Admin Logout
 exports.adminLogout = (req, res) => {
-  res.json({ message: "Logout successful" });
+  return res.json(authService.logout("Logout successful"));
 };
 
-// Create User
 exports.createUser = async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role
-    });
-
-    res.status(201).json({
-      message: "User created successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Error creating user" });
-  }
+  const result = await userService.createUser(req.validated.body);
+  return res.status(201).json(result);
 };
 
-// Get All Users
 exports.getAllUsers = async (req, res) => {
-  try {
-    const users = await User.find().select("-password");
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching users" });
-  }
+  const users = await userService.getAllUsers();
+  return res.json(users);
 };
 
-// Delete User
 exports.deleteUser = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    await User.findByIdAndDelete(req.params.id);
-    res.json({ message: "User deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Error deleting user" });
-  }
+  const result = await userService.deleteUser(req.validated.params.id);
+  return res.json(result);
 };
 
-// Create Project
 exports.createProject = async (req, res) => {
-  try {
-    const { name, scopeOfWork, engineers, supervisors } = req.body;
-
-    if (!name || !scopeOfWork) {
-      return res.status(400).json({ message: "Name and scope of work are required" });
-    }
-
-    const project = await Project.create({
-      name,
-      scopeOfWork,
-      engineers: engineers || [],
-      supervisors: supervisors || []
-    });
-
-    res.status(201).json({
-      message: "Project created successfully",
-      project
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Error creating project" });
-  }
+  const result = await projectService.createProject(req.validated.body);
+  return res.status(201).json(result);
 };
 
-// Get All Projects
 exports.getAllProjects = async (req, res) => {
-  try {
-    const projects = await Project.find()
-      .populate("engineers", "name email")
-      .populate("supervisors", "name email");
-    
-    res.json(projects);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching projects" });
-  }
+  const projects = await projectService.getAllProjects();
+  return res.json(projects);
 };
 
 exports.getProjectById = async (req, res) => {
-  try {
-    const projectId = req.params.id;
-    
-    if (!projectId) {
-      return res.status(400).json({ message: "Project ID is required" });
-    }
-
-    const project = await Project.findById(projectId)
-      .populate('engineers', 'name email')
-      .populate('supervisors', 'name email');
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    res.json({ message: "Project fetched successfully", data: project });
-  } catch (err) {
-    console.error('Error fetching project:', err);
-    res.status(500).json({ message: "Error fetching project" });
-  }
+  const result = await projectService.getProjectById(req.validated.params.id);
+  return res.json(result);
 };
 
-// Update Project
 exports.updateProject = async (req, res) => {
-  try {
-    const { name, scopeOfWork, engineers, supervisors } = req.body;
-    const projectId = req.params.id;
-
-    // تحقق من وجود الـ projectId
-    if (!projectId) {
-      return res.status(400).json({ message: "Project ID is required" });
-    }
-
-    const project = await Project.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    if (name) project.name = name;
-    if (scopeOfWork) project.scopeOfWork = scopeOfWork;
-    if (engineers) project.engineers = engineers;
-    if (supervisors) project.supervisors = supervisors;
-
-    await project.save();
-    res.json({ message: "Project updated successfully", project });
-  } catch (err) {
-    console.error('Error updating project:', err);
-    res.status(500).json({ message: "Error updating project" });
-  }
+  const result = await projectService.updateProject(req.validated.params.id, req.validated.body);
+  return res.json(result);
 };
 
-// Delete Project
 exports.deleteProject = async (req, res) => {
-  try {
-    const projectId = req.params.projectId; 
-    
-    console.log('🗑️ Deleting project with ID:', projectId);
-
-    // 1. البحث عن المشروع والتأكد من وجوده
-    const project = await Project.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    // 2. مسح جميع المهام اليومية المرتبطة بالمشروع
-    const dailyTasksResult = await DailyTask.deleteMany({ project: projectId });
-    console.log(`✅ Deleted ${dailyTasksResult.deletedCount} daily tasks`);
-
-    // 3. مسح جميع المهام الشهرية المرتبطة بالمشروع
-    const monthlyTasksResult = await MonthlyTask.deleteMany({ project: projectId });
-    console.log(`✅ Deleted ${monthlyTasksResult.deletedCount} monthly tasks`);
-
-    // 4. إزالة المشروع من assignedProjects للمهندسين والمشرفين
-    await User.updateMany(
-      { 
-        $or: [
-          { _id: { $in: project.engineers } },
-          { _id: { $in: project.supervisors } }
-        ]
-      },
-      { 
-        $pull: { 
-          assignedProjects: projectId 
-        } 
-      }
-    );
-
-    // 5. مسح المشروع نفسه
-    await Project.findByIdAndDelete(projectId);
-
-    console.log(`🗑️ Project "${project.name}" deleted successfully`);
-    
-    res.json({
-      message: "Project and all related tasks deleted successfully",
-      deletedDailyTasks: dailyTasksResult.deletedCount,
-      deletedMonthlyTasks: monthlyTasksResult.deletedCount,
-      projectName: project.name
-    });
-
-  } catch (err) {
-    console.error("Error deleting project:", err);
-    res.status(500).json({ message: "Error deleting project" });
-  }
+  const result = await projectService.deleteProject(req.validated.params.projectId);
+  return res.json(result);
 };
 
-
-// Get All Daily Tasks
 exports.getAllDailyTasks = async (req, res) => {
-  try {
-    const tasks = await DailyTask.find()
-      .populate("project", "name scopeOfWork")
-      .populate("createdBy", "name email role")
-      .populate("reviewedBy", "name email") 
-      .sort({ createdAt: -1 });
-
-    res.json(tasks);
-  } catch (err) {
-    console.error("Error fetching daily tasks:", err);
-    res.status(500).json({ message: "Error fetching daily tasks" });
-  }
+  const tasks = await taskService.getAllDailyTasks();
+  return res.json(tasks);
 };
 
-// Get All Monthly Tasks
 exports.getAllMonthlyTasks = async (req, res) => {
-  try {
-    const tasks = await MonthlyTask.find()
-      .populate("project", "name scopeOfWork")
-      .populate("createdBy", "name email role")
-      .populate("reviewedBy", "name email") 
-      .sort({ date: -1 });
-
-    res.json(tasks);
-  } catch (err) {
-    console.error("Error fetching monthly tasks:", err);
-    res.status(500).json({ message: "Error fetching monthly tasks" });
-  }
+  const tasks = await taskService.getAllMonthlyTasks();
+  return res.json(tasks);
 };
 
-// Get Tasks for Specific Project
 exports.getProjectTasks = async (req, res) => {
-  try {
-    const { projectId } = req.params;
-
-    const [dailyTasks, monthlyTasks] = await Promise.all([
-      DailyTask.find({ project: projectId })
-        .populate("createdBy", "name email role")
-        .populate("reviewedBy", "name email") 
-        .sort({ createdAt: -1 }),
-      MonthlyTask.find({ project: projectId })
-        .populate("createdBy", "name email role")
-        .populate("reviewedBy", "name email")  
-        .sort({ date: -1 })
-    ]);
-
-    res.json({
-      dailyTasks,
-      monthlyTasks,
-      project: await Project.findById(projectId).select("name scopeOfWork")
-    });
-  } catch (err) {
-    console.error("Error fetching project tasks:", err);
-    res.status(500).json({ message: "Error fetching project tasks" });
-  }
+  const result = await taskService.getAdminProjectTasks(req.validated.params.projectId);
+  return res.json(result);
 };

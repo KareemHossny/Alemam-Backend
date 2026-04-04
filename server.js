@@ -3,6 +3,7 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const connectDB = require("./config/mongo");
+const AppError = require("./src/utils/AppError");
 
 dotenv.config();
 
@@ -72,6 +73,13 @@ app.get("/health", (req, res) => {
 // Error Handling for Production
 app.use((err, req, res, next) => {
   console.error('Production Error:', err);
+
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({
+      message: err.message,
+    });
+  }
+
   res.status(500).json({ 
     error: 'Internal Server Error',
     environment: 'production'

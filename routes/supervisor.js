@@ -3,24 +3,28 @@ const router = express.Router();
 const supervisorController = require("../controllers/supervisor");
 const auth = require("../middlewares/auth");
 const authorize = require("../middlewares/authorize");
+const validate = require("../middlewares/validate");
+const { loginSchema, logoutSchema } = require("../src/validators/auth.validator");
+const { listProjectsSchema } = require("../src/validators/project.validator");
+const { getTasksByProjectSchema, reviewTaskSchema } = require("../src/validators/task.validator");
 
 // Public routes 
-router.post("/login", supervisorController.supervisorLogin);
-router.post("/logout", supervisorController.supervisorLogout);
+router.post("/login", validate(loginSchema), supervisorController.supervisorLogin);
+router.post("/logout", validate(logoutSchema), supervisorController.supervisorLogout);
 
 // Protected routes 
 router.use(auth);
 router.use(authorize(["supervisor"]));
 
 // Projects
-router.get("/projects", supervisorController.getSupervisorProjects);
+router.get("/projects", validate(listProjectsSchema), supervisorController.getSupervisorProjects);
 
 // Daily Tasks Review
-router.get("/daily-tasks/:projectId", supervisorController.getDailyTasks);
-router.put("/daily-tasks/:taskId/review", supervisorController.reviewDailyTask);
+router.get("/daily-tasks/:projectId", validate(getTasksByProjectSchema), supervisorController.getDailyTasks);
+router.put("/daily-tasks/:taskId/review", validate(reviewTaskSchema), supervisorController.reviewDailyTask);
 
 // Monthly Tasks Review
-router.get("/monthly-tasks/:projectId", supervisorController.getMonthlyTasks);
-router.put("/monthly-tasks/:taskId/review", supervisorController.reviewMonthlyTask);
+router.get("/monthly-tasks/:projectId", validate(getTasksByProjectSchema), supervisorController.getMonthlyTasks);
+router.put("/monthly-tasks/:taskId/review", validate(reviewTaskSchema), supervisorController.reviewMonthlyTask);
 
 module.exports = router;
