@@ -4,6 +4,16 @@ const MonthlyTask = require("../../models/monthlyTask");
 const User = require("../../models/User");
 const AppError = require("../utils/AppError");
 
+const populateProjectQuery = (query) => query.populate("engineers", "name email").populate("supervisors", "name email");
+
+const getPopulatedProjectById = (projectId) => populateProjectQuery(Project.findById(projectId));
+
+const buildProjectResponse = (message, project) => ({
+  message,
+  data: project,
+  project,
+});
+
 const getAssignedProjects = async ({ userId, assignmentField, populateUsers, errorMessage }) => {
   try {
     let query = Project.find({
@@ -29,10 +39,9 @@ const createProject = async ({ name, scopeOfWork, engineers, supervisors }) => {
       supervisors: supervisors || [],
     });
 
-    return {
-      message: "Project created successfully",
-      project,
-    };
+    const populatedProject = await getPopulatedProjectById(project._id);
+
+    return buildProjectResponse("Project created successfully", populatedProject);
   } catch (error) {
     AppError.rethrow(error, "Error creating project");
   }
@@ -40,7 +49,7 @@ const createProject = async ({ name, scopeOfWork, engineers, supervisors }) => {
 
 const getAllProjects = async () => {
   try {
-    return await Project.find().populate("engineers", "name email").populate("supervisors", "name email");
+    return await populateProjectQuery(Project.find());
   } catch (error) {
     AppError.rethrow(error, "Error fetching projects");
   }
@@ -48,18 +57,13 @@ const getAllProjects = async () => {
 
 const getProjectById = async (projectId) => {
   try {
-    const project = await Project.findById(projectId)
-      .populate("engineers", "name email")
-      .populate("supervisors", "name email");
+    const project = await getPopulatedProjectById(projectId);
 
     if (!project) {
       throw new AppError("Project not found", 404);
     }
 
-    return {
-      message: "Project fetched successfully",
-      data: project,
-    };
+    return buildProjectResponse("Project fetched successfully", project);
   } catch (error) {
     AppError.rethrow(error, "Error fetching project");
   }
@@ -81,10 +85,9 @@ const updateProject = async (projectId, updates) => {
 
     await project.save();
 
-    return {
-      message: "Project updated successfully",
-      project,
-    };
+    const populatedProject = await getPopulatedProjectById(projectId);
+
+    return buildProjectResponse("Project updated successfully", populatedProject);
   } catch (error) {
     AppError.rethrow(error, "Error updating project");
   }
