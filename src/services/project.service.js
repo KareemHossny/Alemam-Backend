@@ -1,8 +1,9 @@
 const Project = require("../../models/Project");
 const DailyTask = require("../../models/dailyTask");
 const MonthlyTask = require("../../models/monthlyTask");
-const User = require("../../models/User");
 const AppError = require("../utils/AppError");
+const { normalizeIds, syncProjectAssignments } = require("../utils/referenceIntegrity");
+const runInTransaction = require("../utils/runInTransaction");
 
 const populateProjectQuery = (query) => query.populate("engineers", "name email").populate("supervisors", "name email");
 
@@ -32,14 +33,28 @@ const getAssignedProjects = async ({ userId, assignmentField, populateUsers, err
 
 const createProject = async ({ name, scopeOfWork, engineers, supervisors }) => {
   try {
-    const project = await Project.create({
-      name,
-      scopeOfWork,
-      engineers: engineers || [],
-      supervisors: supervisors || [],
-    });
+    const engineerIds = normalizeIds(engineers || []);
+    const supervisorIds = normalizeIds(supervisors || []);
 
-    const populatedProject = await getPopulatedProjectById(project._id);
+    const populatedProject = await runInTransaction(async (session) => {
+      const project = new Project({
+        name,
+        scopeOfWork,
+        engineers: engineerIds,
+        supervisors: supervisorIds,
+      });
+
+      await project.save({ session });
+
+      await syncProjectAssignments({
+        projectId: project._id,
+        nextEngineerIds: engineerIds,
+        nextSupervisorIds: supervisorIds,
+        session,
+      });
+
+      return await populateProjectQuery(Project.findById(project._id).session(session));
+    });
 
     return buildProjectResponse("Project created successfully", populatedProject);
   } catch (error) {
@@ -71,21 +86,34 @@ const getProjectById = async (projectId) => {
 
 const updateProject = async (projectId, updates) => {
   try {
-    const project = await Project.findById(projectId);
-    if (!project) {
-      throw new AppError("Project not found", 404);
-    }
+    const populatedProject = await runInTransaction(async (session) => {
+      const project = await Project.findById(projectId).session(session);
+      if (!project) {
+        throw new AppError("Project not found", 404);
+      }
 
-    const { name, scopeOfWork, engineers, supervisors } = updates;
+      const previousEngineerIds = normalizeIds(project.engineers || []);
+      const previousSupervisorIds = normalizeIds(project.supervisors || []);
+      const { name, scopeOfWork, engineers, supervisors } = updates;
 
-    if (name) project.name = name;
-    if (scopeOfWork) project.scopeOfWork = scopeOfWork;
-    if (engineers !== undefined) project.engineers = engineers;
-    if (supervisors !== undefined) project.supervisors = supervisors;
+      if (name) project.name = name;
+      if (scopeOfWork) project.scopeOfWork = scopeOfWork;
+      if (engineers !== undefined) project.engineers = normalizeIds(engineers);
+      if (supervisors !== undefined) project.supervisors = normalizeIds(supervisors);
 
-    await project.save();
+      await project.save({ session });
 
-    const populatedProject = await getPopulatedProjectById(projectId);
+      await syncProjectAssignments({
+        projectId,
+        previousEngineerIds,
+        previousSupervisorIds,
+        nextEngineerIds: normalizeIds(project.engineers || []),
+        nextSupervisorIds: normalizeIds(project.supervisors || []),
+        session,
+      });
+
+      return await populateProjectQuery(Project.findById(projectId).session(session));
+    });
 
     return buildProjectResponse("Project updated successfully", populatedProject);
   } catch (error) {
@@ -97,40 +125,40 @@ const deleteProject = async (projectId) => {
   try {
     console.log("Deleting project with ID:", projectId);
 
-    const project = await Project.findById(projectId);
-    if (!project) {
-      throw new AppError("Project not found", 404);
-    }
-
-    const dailyTasksResult = await DailyTask.deleteMany({ project: projectId });
-    console.log(`Deleted ${dailyTasksResult.deletedCount} daily tasks`);
-
-    const monthlyTasksResult = await MonthlyTask.deleteMany({ project: projectId });
-    console.log(`Deleted ${monthlyTasksResult.deletedCount} monthly tasks`);
-
-    await User.updateMany(
-      {
-        $or: [
-          { _id: { $in: project.engineers } },
-          { _id: { $in: project.supervisors } },
-        ],
-      },
-      {
-        $pull: {
-          assignedProjects: projectId,
-        },
+    const deletionSummary = await runInTransaction(async (session) => {
+      const project = await Project.findById(projectId).session(session);
+      if (!project) {
+        throw new AppError("Project not found", 404);
       }
-    );
 
-    await Project.findByIdAndDelete(projectId);
+      const dailyTasksResult = await DailyTask.deleteMany({ project: projectId }, { session });
+      const monthlyTasksResult = await MonthlyTask.deleteMany({ project: projectId }, { session });
 
-    console.log(`Project "${project.name}" deleted successfully`);
+      await syncProjectAssignments({
+        projectId,
+        previousEngineerIds: normalizeIds(project.engineers || []),
+        previousSupervisorIds: normalizeIds(project.supervisors || []),
+        nextEngineerIds: [],
+        nextSupervisorIds: [],
+        session,
+      });
+
+      await Project.findByIdAndDelete(projectId, { session });
+
+      return {
+        projectName: project.name,
+        deletedDailyTasks: dailyTasksResult.deletedCount,
+        deletedMonthlyTasks: monthlyTasksResult.deletedCount,
+      };
+    });
+
+    console.log(`Project "${deletionSummary.projectName}" deleted successfully`);
 
     return {
       message: "Project and all related tasks deleted successfully",
-      deletedDailyTasks: dailyTasksResult.deletedCount,
-      deletedMonthlyTasks: monthlyTasksResult.deletedCount,
-      projectName: project.name,
+      deletedDailyTasks: deletionSummary.deletedDailyTasks,
+      deletedMonthlyTasks: deletionSummary.deletedMonthlyTasks,
+      projectName: deletionSummary.projectName,
     };
   } catch (error) {
     AppError.rethrow(error, "Error deleting project");

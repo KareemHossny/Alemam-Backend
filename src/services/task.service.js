@@ -1,8 +1,10 @@
 const Project = require("../../models/Project");
 const DailyTask = require("../../models/dailyTask");
 const MonthlyTask = require("../../models/monthlyTask");
+const User = require("../../models/User");
 const AppError = require("../utils/AppError");
 const { canCreateTask, canDeleteTask, canReviewTask } = require("../policies/task.policy");
+const runInTransaction = require("../utils/runInTransaction");
 
 const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -68,8 +70,9 @@ const buildTaskQuery = (taskType, projectId, filters = {}) => {
   return query;
 };
 
-const getProjectOrThrow = async (projectId, { message, statusCode }) => {
-  const project = await Project.findById(projectId);
+const getProjectOrThrow = async (projectId, { message, statusCode }, options = {}) => {
+  const { session } = options;
+  const project = await Project.findById(projectId).session(session || null);
 
   if (!project) {
     throw new AppError(message, statusCode);
@@ -83,28 +86,41 @@ const createTask = async (taskType, payload, user) => {
 
   try {
     const { projectId, title, note, date } = payload;
-    const project = await getProjectOrThrow(projectId, {
-      message: "Project not found",
-      statusCode: 404,
-    });
+    const task = await runInTransaction(async (session) => {
+      const [project, activeUser] = await Promise.all([
+        getProjectOrThrow(projectId, {
+          message: "Project not found",
+          statusCode: 404,
+        }, { session }),
+        User.findById(user.id).select("_id role").session(session),
+      ]);
 
-    if (!canCreateTask(user, project)) {
-      throw new AppError("You are not assigned to this project", 403);
-    }
+      if (!activeUser) {
+        throw new AppError("User session is no longer valid", 401);
+      }
 
-    const normalizedDate =
-      taskType === "daily"
-        ? normalizeUtcDateOnly(date)
-        : date
-          ? new Date(date)
-          : undefined;
+      if (!canCreateTask({ id: activeUser._id, role: activeUser.role }, project)) {
+        throw new AppError("You are not assigned to this project", 403);
+      }
 
-    const task = await config.model.create({
-      project: projectId,
-      createdBy: user.id,
-      title,
-      note,
-      ...(normalizedDate ? { date: normalizedDate } : {}),
+      const normalizedDate =
+        taskType === "daily"
+          ? normalizeUtcDateOnly(date)
+          : date
+            ? new Date(date)
+            : undefined;
+
+      const createdTask = new config.model({
+        project: projectId,
+        createdBy: activeUser._id,
+        title,
+        note,
+        ...(normalizedDate ? { date: normalizedDate } : {}),
+      });
+
+      await createdTask.save({ session });
+
+      return createdTask;
     });
 
     console.log(`Engineer created ${taskType} task: ${task._id}`);
