@@ -29,6 +29,11 @@ const serializeUser = (user) => ({
   role: user.role,
 });
 
+const serializeAdminUser = () => ({
+  role: "admin",
+  email: process.env.ADMIN_EMAIL,
+});
+
 const loginAdmin = async ({ email, password }) => {
   try {
     if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) {
@@ -38,7 +43,7 @@ const loginAdmin = async ({ email, password }) => {
     return {
       message: "Login successful",
       token: generateToken({ role: "admin" }),
-      user: { role: "admin" },
+      user: serializeAdminUser(),
     };
   } catch (error) {
     AppError.rethrow(error, "Server error");
@@ -82,9 +87,39 @@ const loginRoleUser = async ({ email, password }, role) => {
 
 const logout = (message) => ({ message });
 
+const getCurrentAdminUser = async () => ({
+  message: "Session active",
+  user: serializeAdminUser(),
+});
+
+const getCurrentRoleUser = async (authUser, role) => {
+  const config = ROLE_CONFIG[role];
+
+  try {
+    const user = await User.findById(authUser.id).select("_id name email role");
+    if (!user) {
+      throw new AppError("Session expired. Please log in again.", 401);
+    }
+
+    if (!hasRole(user, role)) {
+      throw new AppError(config.forbiddenMessage, 403);
+    }
+
+    return {
+      message: "Session active",
+      user: serializeUser(user),
+    };
+  } catch (error) {
+    AppError.rethrow(error, config.internalErrorMessage);
+  }
+};
+
 module.exports = {
   loginAdmin,
   loginEngineer: (payload) => loginRoleUser(payload, "engineer"),
   loginSupervisor: (payload) => loginRoleUser(payload, "supervisor"),
   logout,
+  getCurrentAdminUser,
+  getCurrentEngineerUser: (authUser) => getCurrentRoleUser(authUser, "engineer"),
+  getCurrentSupervisorUser: (authUser) => getCurrentRoleUser(authUser, "supervisor"),
 };

@@ -1,8 +1,12 @@
 const jwt = require("jsonwebtoken");
+const { getAuthCookieConfigForRequest, getCookieValue } = require("../src/utils/authCookie");
 
 const auth = (req, res, next) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
+    const cookieConfig = getAuthCookieConfigForRequest(req);
+    const cookieToken = cookieConfig ? getCookieValue(req, cookieConfig.name) : null;
+    const headerToken = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
+    const token = cookieToken || headerToken;
     
     if (!token) {
       return res.status(401).json({ message: "No token provided" });

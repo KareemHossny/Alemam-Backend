@@ -27,7 +27,14 @@ const logoutSchema = {
   query: noInputSchema,
 };
 
+const currentUserSchema = {
+  body: noInputSchema,
+  params: noInputSchema,
+  query: noInputSchema,
+};
+
 module.exports = {
   loginSchema,
   logoutSchema,
+  currentUserSchema,
 };

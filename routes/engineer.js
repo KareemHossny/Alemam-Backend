@@ -5,7 +5,7 @@ const auth = require("../middlewares/auth");
 const authorize = require("../middlewares/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../middlewares/validate");
-const { loginSchema, logoutSchema } = require("../src/validators/auth.validator");
+const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
 const { listProjectsSchema } = require("../src/validators/project.validator");
 const {
   createDailyTaskSchema,
@@ -24,6 +24,7 @@ router.use(auth);
 router.use(authorize(["engineer"]));
 
 // Projects
+router.get("/me", validate(currentUserSchema), engineerController.getCurrentEngineerUser);
 router.get("/projects", validate(listProjectsSchema), engineerController.getEngineerProjects);
 
 // Daily Tasks

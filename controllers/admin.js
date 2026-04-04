@@ -2,14 +2,27 @@ const authService = require("../src/services/auth.service");
 const userService = require("../src/services/user.service");
 const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
+const { getAuthCookieConfig } = require("../src/utils/authCookie");
+
+const ADMIN_COOKIE_CONFIG = getAuthCookieConfig("admin");
 
 exports.adminLogin = async (req, res) => {
   const result = await authService.loginAdmin(req.validated.body);
-  return res.json(result);
+  const { token, ...responseBody } = result;
+
+  res.cookie(ADMIN_COOKIE_CONFIG.name, token, ADMIN_COOKIE_CONFIG.setOptions);
+
+  return res.json(responseBody);
 };
 
 exports.adminLogout = (req, res) => {
+  res.clearCookie(ADMIN_COOKIE_CONFIG.name, ADMIN_COOKIE_CONFIG.clearOptions);
   return res.json(authService.logout("Logout successful"));
+};
+
+exports.getCurrentAdminUser = async (req, res) => {
+  const result = await authService.getCurrentAdminUser();
+  return res.json(result);
 };
 
 exports.createUser = async (req, res) => {

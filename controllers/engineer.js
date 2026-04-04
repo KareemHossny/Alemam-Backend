@@ -1,14 +1,27 @@
 const authService = require("../src/services/auth.service");
 const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
+const { getAuthCookieConfig } = require("../src/utils/authCookie");
+
+const ENGINEER_COOKIE_CONFIG = getAuthCookieConfig("engineer");
 
 exports.engineerLogin = async (req, res) => {
   const result = await authService.loginEngineer(req.validated.body);
-  return res.json(result);
+  const { token, ...responseBody } = result;
+
+  res.cookie(ENGINEER_COOKIE_CONFIG.name, token, ENGINEER_COOKIE_CONFIG.setOptions);
+
+  return res.json(responseBody);
 };
 
 exports.engineerLogout = (req, res) => {
+  res.clearCookie(ENGINEER_COOKIE_CONFIG.name, ENGINEER_COOKIE_CONFIG.clearOptions);
   return res.json(authService.logout("Engineer logout successful"));
+};
+
+exports.getCurrentEngineerUser = async (req, res) => {
+  const result = await authService.getCurrentEngineerUser(req.user);
+  return res.json(result);
 };
 
 exports.getEngineerProjects = async (req, res) => {

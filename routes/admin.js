@@ -5,7 +5,7 @@ const auth = require("../middlewares/auth");
 const authorize = require("../middlewares/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../middlewares/validate");
-const { loginSchema, logoutSchema } = require("../src/validators/auth.validator");
+const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
 const {
   createProjectSchema,
   projectByIdSchema,
@@ -26,6 +26,7 @@ router.use(auth);
 router.use(authorize(["admin"]));
 
 // Users Management
+router.get("/me", validate(currentUserSchema), adminController.getCurrentAdminUser);
 router.get("/users", validate(listUsersSchema), adminController.getAllUsers);
 router.post("/users", validate(createUserSchema), adminController.createUser);
 router.delete("/users/:id", validate(deleteUserSchema), adminController.deleteUser);

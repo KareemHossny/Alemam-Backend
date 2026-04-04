@@ -4,6 +4,8 @@ const cors = require("cors");
 const helmet = require("helmet");
 const connectDB = require("./config/mongo");
 const AppError = require("./src/utils/AppError");
+const verifyOrigin = require("./middlewares/verifyOrigin");
+const { clientOrigins } = require("./src/utils/clientOrigins");
 
 dotenv.config();
 
@@ -27,16 +29,11 @@ app.use(helmet({
 
 // CORS for Production
 app.use(cors({
-  origin: [
-    "http://localhost:3000", 
-    "http://localhost:3001", 
-    "http://localhost:3002",
-    "https://alemam-admin.vercel.app",
-    "https://alemam-engineer.vercel.app",
-    "https://alemam-supervisor.vercel.app",
-  ],
-  credentials: false
+  origin: clientOrigins,
+  credentials: true
 }));
+
+app.use(verifyOrigin);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
