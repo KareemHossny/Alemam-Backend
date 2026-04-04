@@ -3,6 +3,7 @@ const router = express.Router();
 const adminController = require("../controllers/admin");
 const auth = require("../middlewares/auth");
 const authorize = require("../middlewares/authorize");
+const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../middlewares/validate");
 const { loginSchema, logoutSchema } = require("../src/validators/auth.validator");
 const {
@@ -17,7 +18,7 @@ const { createUserSchema, deleteUserSchema, listUsersSchema } = require("../src/
 const { listTasksSchema } = require("../src/validators/task.validator");
 
 // Public routes
-router.post("/login", validate(loginSchema), adminController.adminLogin);
+router.post("/login", authRateLimiters.adminLogin, validate(loginSchema), adminController.adminLogin);
 router.post("/logout", validate(logoutSchema), adminController.adminLogout);
 
 // Protected routes

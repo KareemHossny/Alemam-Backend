@@ -9,6 +9,9 @@ dotenv.config();
 
 const app = express();
 
+// Trust the first proxy hop so req.ip reflects the real client IP in production.
+app.set("trust proxy", 1);
+
 // Production Security Settings
 app.use(helmet({
   crossOriginResourcePolicy: false,
