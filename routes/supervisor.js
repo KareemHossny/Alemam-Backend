@@ -6,7 +6,7 @@ const authorize = require("../middlewares/authorize");
 const validate = require("../middlewares/validate");
 const { loginSchema, logoutSchema } = require("../src/validators/auth.validator");
 const { listProjectsSchema } = require("../src/validators/project.validator");
-const { getTasksByProjectSchema, reviewTaskSchema } = require("../src/validators/task.validator");
+const { getDailyTasksByProjectSchema, getTasksByProjectSchema, reviewTaskSchema } = require("../src/validators/task.validator");
 
 // Public routes 
 router.post("/login", validate(loginSchema), supervisorController.supervisorLogin);
@@ -20,7 +20,7 @@ router.use(authorize(["supervisor"]));
 router.get("/projects", validate(listProjectsSchema), supervisorController.getSupervisorProjects);
 
 // Daily Tasks Review
-router.get("/daily-tasks/:projectId", validate(getTasksByProjectSchema), supervisorController.getDailyTasks);
+router.get("/daily-tasks/:projectId", validate(getDailyTasksByProjectSchema), supervisorController.getDailyTasks);
 router.put("/daily-tasks/:taskId/review", validate(reviewTaskSchema), supervisorController.reviewDailyTask);
 
 // Monthly Tasks Review

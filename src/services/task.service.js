@@ -4,6 +4,8 @@ const MonthlyTask = require("../../models/monthlyTask");
 const AppError = require("../utils/AppError");
 const { canCreateTask, canDeleteTask, canReviewTask } = require("../policies/task.policy");
 
+const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 const TASK_CONFIG = {
   daily: {
     model: DailyTask,
@@ -33,6 +35,39 @@ const TASK_CONFIG = {
 
 const getTaskConfig = (taskType) => TASK_CONFIG[taskType];
 
+const normalizeUtcDateOnly = (dateString) => {
+  const match = DATE_ONLY_REGEX.exec(dateString || "");
+
+  if (!match) {
+    throw new AppError("Invalid date", 400);
+  }
+
+  const [, year, month, day] = match;
+
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+};
+
+const buildDailyTaskDateFilter = (dateString) => {
+  const start = normalizeUtcDateOnly(dateString);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  return {
+    $gte: start,
+    $lt: end,
+  };
+};
+
+const buildTaskQuery = (taskType, projectId, filters = {}) => {
+  const query = { project: projectId };
+
+  if (taskType === "daily" && filters?.date) {
+    query.date = buildDailyTaskDateFilter(filters.date);
+  }
+
+  return query;
+};
+
 const getProjectOrThrow = async (projectId, { message, statusCode }) => {
   const project = await Project.findById(projectId);
 
@@ -57,12 +92,19 @@ const createTask = async (taskType, payload, user) => {
       throw new AppError("You are not assigned to this project", 403);
     }
 
+    const normalizedDate =
+      taskType === "daily"
+        ? normalizeUtcDateOnly(date)
+        : date
+          ? new Date(date)
+          : undefined;
+
     const task = await config.model.create({
       project: projectId,
       createdBy: user.id,
       title,
       note,
-      ...(date ? { date: new Date(date) } : {}),
+      ...(normalizedDate ? { date: normalizedDate } : {}),
     });
 
     console.log(`Engineer created ${taskType} task: ${task._id}`);
@@ -73,7 +115,7 @@ const createTask = async (taskType, payload, user) => {
   }
 };
 
-const getProjectTasksForEngineer = async (taskType, projectId, user) => {
+const getProjectTasksForEngineer = async (taskType, projectId, user, filters = {}) => {
   const config = getTaskConfig(taskType);
 
   try {
@@ -87,7 +129,7 @@ const getProjectTasksForEngineer = async (taskType, projectId, user) => {
     }
 
     return await config.model
-      .find({ project: projectId })
+      .find(buildTaskQuery(taskType, projectId, filters))
       .populate("createdBy", "name email")
       .populate("reviewedBy", "name email")
       .sort(config.sort);
@@ -119,7 +161,7 @@ const deleteTask = async (taskType, taskId, user) => {
   }
 };
 
-const getProjectTasksForSupervisor = async (taskType, projectId, user) => {
+const getProjectTasksForSupervisor = async (taskType, projectId, user, filters = {}) => {
   const config = getTaskConfig(taskType);
 
   try {
@@ -132,7 +174,10 @@ const getProjectTasksForSupervisor = async (taskType, projectId, user) => {
       throw new AppError("Access denied to this project", 403);
     }
 
-    return await config.model.find({ project: projectId }).populate("createdBy", "name email").sort(config.sort);
+    return await config.model
+      .find(buildTaskQuery(taskType, projectId, filters))
+      .populate("createdBy", "name email")
+      .sort(config.sort);
   } catch (error) {
     AppError.rethrow(error, config.fetchError);
   }
@@ -219,11 +264,11 @@ const getAdminProjectTasks = async (projectId) => {
 module.exports = {
   createDailyTask: (payload, user) => createTask("daily", payload, user),
   createMonthlyTask: (payload, user) => createTask("monthly", payload, user),
-  getEngineerDailyTasks: (projectId, user) => getProjectTasksForEngineer("daily", projectId, user),
+  getEngineerDailyTasks: (projectId, user, filters) => getProjectTasksForEngineer("daily", projectId, user, filters),
   getEngineerMonthlyTasks: (projectId, user) => getProjectTasksForEngineer("monthly", projectId, user),
   deleteDailyTask: (taskId, user) => deleteTask("daily", taskId, user),
   deleteMonthlyTask: (taskId, user) => deleteTask("monthly", taskId, user),
-  getSupervisorDailyTasks: (projectId, user) => getProjectTasksForSupervisor("daily", projectId, user),
+  getSupervisorDailyTasks: (projectId, user, filters) => getProjectTasksForSupervisor("daily", projectId, user, filters),
   getSupervisorMonthlyTasks: (projectId, user) => getProjectTasksForSupervisor("monthly", projectId, user),
   reviewDailyTask: (taskId, reviewData, user) => reviewTask("daily", taskId, reviewData, user),
   reviewMonthlyTask: (taskId, reviewData, user) => reviewTask("monthly", taskId, reviewData, user),

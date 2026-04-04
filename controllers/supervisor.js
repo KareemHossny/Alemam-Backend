@@ -17,7 +17,7 @@ exports.getSupervisorProjects = async (req, res) => {
 };
 
 exports.getDailyTasks = async (req, res) => {
-  const tasks = await taskService.getSupervisorDailyTasks(req.validated.params.projectId, req.user);
+  const tasks = await taskService.getSupervisorDailyTasks(req.validated.params.projectId, req.user, req.validated.query);
   return res.json(tasks);
 };
 

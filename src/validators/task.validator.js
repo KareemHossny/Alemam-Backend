@@ -38,7 +38,7 @@ const buildTaskBodySchema = (dateSchema) =>
     }));
 
 const createDailyTaskSchema = {
-  body: buildTaskBodySchema(isoDate("date").optional()),
+  body: buildTaskBodySchema(isoDate("date")),
   params: noInputSchema,
   query: noInputSchema,
 };
@@ -61,6 +61,14 @@ const getTasksByProjectSchema = {
   body: noInputSchema,
   params: projectTasksParamsSchema,
   query: noInputSchema,
+};
+
+const getDailyTasksByProjectSchema = {
+  body: noInputSchema,
+  params: projectTasksParamsSchema,
+  query: strictObject({
+    date: isoDate("date").optional(),
+  }),
 };
 
 const deleteTaskSchema = {
@@ -87,6 +95,7 @@ const listTasksSchema = {
 module.exports = {
   createDailyTaskSchema,
   createMonthlyTaskSchema,
+  getDailyTasksByProjectSchema,
   getTasksByProjectSchema,
   deleteTaskSchema,
   reviewTaskSchema,

@@ -9,6 +9,7 @@ const { listProjectsSchema } = require("../src/validators/project.validator");
 const {
   createDailyTaskSchema,
   createMonthlyTaskSchema,
+  getDailyTasksByProjectSchema,
   getTasksByProjectSchema,
   deleteTaskSchema,
 } = require("../src/validators/task.validator");
@@ -26,7 +27,7 @@ router.get("/projects", validate(listProjectsSchema), engineerController.getEngi
 
 // Daily Tasks
 router.post("/daily-tasks", validate(createDailyTaskSchema), engineerController.addDailyTask);
-router.get("/daily-tasks/:projectId", validate(getTasksByProjectSchema), engineerController.getDailyTasks);
+router.get("/daily-tasks/:projectId", validate(getDailyTasksByProjectSchema), engineerController.getDailyTasks);
 router.delete("/daily-tasks/:taskId", validate(deleteTaskSchema), engineerController.deleteDailyTask);
 
 // Monthly Tasks
