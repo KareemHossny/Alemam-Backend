@@ -1,6 +1,8 @@
 const { z } = require("zod");
 const { isoDate, noInputSchema, objectId, optionalText, requiredText, strictObject } = require("./common");
 
+const BULK_TASK_LIMIT = 50;
+
 const reviewStatusSchema = z
   .enum(["pending", "done", "failed", "approved", "rejected"])
   .transform((status) => {
@@ -49,6 +51,26 @@ const createMonthlyTaskSchema = {
   query: noInputSchema,
 };
 
+const buildBulkTaskSchema = (dateSchema) =>
+  z
+    .array(buildTaskBodySchema(dateSchema), {
+      invalid_type_error: "tasks must be an array",
+    })
+    .min(1, "At least one task is required")
+    .max(BULK_TASK_LIMIT, `A maximum of ${BULK_TASK_LIMIT} tasks can be submitted at once`);
+
+const createDailyTasksBulkSchema = {
+  body: buildBulkTaskSchema(isoDate("date")),
+  params: noInputSchema,
+  query: noInputSchema,
+};
+
+const createMonthlyTasksBulkSchema = {
+  body: buildBulkTaskSchema(isoDate("date")),
+  params: noInputSchema,
+  query: noInputSchema,
+};
+
 const projectTasksParamsSchema = strictObject({
   projectId: objectId("projectId"),
 });
@@ -93,8 +115,11 @@ const listTasksSchema = {
 };
 
 module.exports = {
+  BULK_TASK_LIMIT,
   createDailyTaskSchema,
+  createDailyTasksBulkSchema,
   createMonthlyTaskSchema,
+  createMonthlyTasksBulkSchema,
   getDailyTasksByProjectSchema,
   getTasksByProjectSchema,
   deleteTaskSchema,

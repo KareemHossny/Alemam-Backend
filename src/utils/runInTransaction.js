@@ -30,7 +30,11 @@ const runInTransaction = async (work, options = {}) => {
     }
 
     if (error?.code === 11000) {
-      throw new AppError("Duplicate key error", 409);
+      const duplicateMessage = error?.keyPattern?.fingerprint
+        ? "A matching task already exists for this project, date, title, and note."
+        : "Duplicate key error";
+
+      throw new AppError(duplicateMessage, 409);
     }
 
     const errorMessage = error?.codeName === "IllegalOperation"

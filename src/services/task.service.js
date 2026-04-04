@@ -5,6 +5,7 @@ const User = require("../../models/User");
 const AppError = require("../utils/AppError");
 const { canCreateTask, canDeleteTask, canReviewTask } = require("../policies/task.policy");
 const runInTransaction = require("../utils/runInTransaction");
+const { buildTaskFingerprint } = require("../utils/taskFingerprint");
 
 const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -36,6 +37,8 @@ const TASK_CONFIG = {
 };
 
 const getTaskConfig = (taskType) => TASK_CONFIG[taskType];
+
+const getBulkCreateErrorMessage = (taskType) => `Error creating ${taskType} tasks`;
 
 const normalizeUtcDateOnly = (dateString) => {
   const match = DATE_ONLY_REGEX.exec(dateString || "");
@@ -81,42 +84,203 @@ const getProjectOrThrow = async (projectId, { message, statusCode }, options = {
   return project;
 };
 
+const normalizeTaskDate = (taskType, date) =>
+  taskType === "daily"
+    ? normalizeUtcDateOnly(date)
+    : date
+      ? new Date(date)
+      : undefined;
+
+const prepareTaskDocument = (taskType, payload, userId) => {
+  const normalizedDate = normalizeTaskDate(taskType, payload.date);
+  const document = {
+    project: payload.projectId,
+    createdBy: userId,
+    title: payload.title,
+    ...(payload.note ? { note: payload.note } : {}),
+    ...(normalizedDate ? { date: normalizedDate } : {}),
+  };
+
+  const fingerprint = buildTaskFingerprint({
+    project: document.project,
+    createdBy: document.createdBy,
+    title: document.title,
+    note: document.note,
+    date: document.date,
+  });
+
+  return {
+    document: {
+      ...document,
+      fingerprint,
+    },
+    fingerprint,
+  };
+};
+
+const buildDuplicateLookupCondition = (document) => {
+  const baseCondition = {
+    createdBy: document.createdBy,
+    project: document.project,
+    title: document.title,
+    date: document.date,
+  };
+
+  if (document.note) {
+    return {
+      ...baseCondition,
+      note: document.note,
+    };
+  }
+
+  return {
+    ...baseCondition,
+    $or: [
+      { note: { $exists: false } },
+      { note: null },
+      { note: "" },
+    ],
+  };
+};
+
+const buildBulkFailureItem = (task, index, code, reason, statusCode) => ({
+  index,
+  projectId: task.projectId,
+  title: task.title,
+  ...(task.date ? { date: task.date } : {}),
+  code,
+  reason,
+  statusCode,
+});
+
+const resolveBulkFailureStatusCode = (failedItems) => {
+  if (failedItems.some((item) => item.statusCode === 403)) {
+    return 403;
+  }
+
+  if (failedItems.some((item) => item.statusCode === 404)) {
+    return 404;
+  }
+
+  if (failedItems.some((item) => item.statusCode === 409)) {
+    return 409;
+  }
+
+  return 400;
+};
+
+const buildBulkFailureResponse = (taskType, failedItems, requestedCount) => {
+  const publicFailedItems = [...failedItems]
+    .sort((left, right) => left.index - right.index)
+    .map(({ statusCode, ...failedItem }) => failedItem);
+
+  return {
+    statusCode: resolveBulkFailureStatusCode(failedItems),
+    message: `Bulk ${taskType} task creation failed. No tasks were saved.`,
+    requestedCount,
+    createdCount: 0,
+    successItems: [],
+    failedItems: publicFailedItems,
+    rolledBack: true,
+  };
+};
+
+const buildBulkSuccessResponse = (taskType, preparedTasks, createdTasks) => ({
+  statusCode: 201,
+  message: `${createdTasks.length} ${taskType} task(s) created successfully.`,
+  requestedCount: preparedTasks.length,
+  createdCount: createdTasks.length,
+  successItems: createdTasks.map((task, index) => ({
+    index: preparedTasks[index].index,
+    taskId: task._id,
+    projectId: String(task.project),
+    title: task.title,
+    date: task.date instanceof Date ? task.date.toISOString().split("T")[0] : undefined,
+    status: task.status,
+  })),
+  failedItems: [],
+  rolledBack: false,
+});
+
+const getExistingTaskFingerprints = async (taskType, preparedTasks, session) => {
+  const config = getTaskConfig(taskType);
+  const duplicateLookup = [
+    {
+      fingerprint: {
+        $in: preparedTasks.map((task) => task.fingerprint),
+      },
+    },
+    ...preparedTasks.map(({ document }) => buildDuplicateLookupCondition(document)),
+  ];
+
+  const existingTasks = await config.model
+    .find({ $or: duplicateLookup })
+    .select("project createdBy title note date fingerprint")
+    .session(session);
+
+  return new Set(
+    existingTasks.map((task) =>
+      task.fingerprint
+      || buildTaskFingerprint({
+        project: task.project,
+        createdBy: task.createdBy,
+        title: task.title,
+        note: task.note,
+        date: task.date,
+      })
+    )
+  );
+};
+
+const ensureActiveEngineer = async (userId, session) => {
+  const activeUser = await User.findById(userId).select("_id role").session(session);
+
+  if (!activeUser) {
+    throw new AppError("User session is no longer valid", 401);
+  }
+
+  return activeUser;
+};
+
+const getProjectAccessMap = async (projectIds, session) => {
+  const projects = await Project.find({ _id: { $in: projectIds } })
+    .select("_id engineers supervisors")
+    .session(session);
+
+  return new Map(projects.map((project) => [String(project._id), project]));
+};
+
 const createTask = async (taskType, payload, user) => {
   const config = getTaskConfig(taskType);
 
   try {
-    const { projectId, title, note, date } = payload;
     const task = await runInTransaction(async (session) => {
       const [project, activeUser] = await Promise.all([
-        getProjectOrThrow(projectId, {
+        getProjectOrThrow(payload.projectId, {
           message: "Project not found",
           statusCode: 404,
         }, { session }),
-        User.findById(user.id).select("_id role").session(session),
+        ensureActiveEngineer(user.id, session),
       ]);
-
-      if (!activeUser) {
-        throw new AppError("User session is no longer valid", 401);
-      }
 
       if (!canCreateTask({ id: activeUser._id, role: activeUser.role }, project)) {
         throw new AppError("You are not assigned to this project", 403);
       }
 
-      const normalizedDate =
-        taskType === "daily"
-          ? normalizeUtcDateOnly(date)
-          : date
-            ? new Date(date)
-            : undefined;
+      const preparedTask = prepareTaskDocument(taskType, payload, activeUser._id);
+      const existingFingerprints = await getExistingTaskFingerprints(taskType, [
+        {
+          index: 0,
+          originalTask: payload,
+          ...preparedTask,
+        },
+      ], session);
 
-      const createdTask = new config.model({
-        project: projectId,
-        createdBy: activeUser._id,
-        title,
-        note,
-        ...(normalizedDate ? { date: normalizedDate } : {}),
-      });
+      if (existingFingerprints.has(preparedTask.fingerprint)) {
+        throw new AppError("A matching task already exists for this project, date, title, and note.", 409);
+      }
+
+      const createdTask = new config.model(preparedTask.document);
 
       await createdTask.save({ session });
 
@@ -128,6 +292,105 @@ const createTask = async (taskType, payload, user) => {
     return task;
   } catch (error) {
     AppError.rethrow(error, config.createError);
+  }
+};
+
+const createTasksBulk = async (taskType, tasks, user) => {
+  const config = getTaskConfig(taskType);
+
+  try {
+    const result = await runInTransaction(async (session) => {
+      const activeUser = await ensureActiveEngineer(user.id, session);
+      const projectAccessMap = await getProjectAccessMap(
+        [...new Set(tasks.map((task) => task.projectId))],
+        session
+      );
+
+      const failedItems = [];
+      const preparedTasks = [];
+      const requestFingerprints = new Map();
+
+      tasks.forEach((task, index) => {
+        const project = projectAccessMap.get(task.projectId);
+
+        if (!project) {
+          failedItems.push(
+            buildBulkFailureItem(task, index, "PROJECT_NOT_FOUND", "Project not found", 404)
+          );
+          return;
+        }
+
+        if (!canCreateTask({ id: activeUser._id, role: activeUser.role }, project)) {
+          failedItems.push(
+            buildBulkFailureItem(task, index, "PROJECT_ACCESS_DENIED", "You are not assigned to this project", 403)
+          );
+          return;
+        }
+
+        const preparedTask = prepareTaskDocument(taskType, task, activeUser._id);
+        const duplicateIndex = requestFingerprints.get(preparedTask.fingerprint);
+
+        if (duplicateIndex !== undefined) {
+          failedItems.push(
+            buildBulkFailureItem(
+              task,
+              index,
+              "DUPLICATE_IN_BATCH",
+              `Duplicate task in this batch. Matches item ${duplicateIndex + 1}.`,
+              409
+            )
+          );
+          return;
+        }
+
+        requestFingerprints.set(preparedTask.fingerprint, index);
+        preparedTasks.push({
+          index,
+          originalTask: task,
+          ...preparedTask,
+        });
+      });
+
+      if (preparedTasks.length > 0) {
+        const existingFingerprints = await getExistingTaskFingerprints(taskType, preparedTasks, session);
+
+        preparedTasks.forEach((task) => {
+          if (existingFingerprints.has(task.fingerprint)) {
+            failedItems.push(
+              buildBulkFailureItem(
+                task.originalTask,
+                task.index,
+                "DUPLICATE_TASK",
+                "A matching task already exists for this project, date, title, and note.",
+                409
+              )
+            );
+          }
+        });
+      }
+
+      if (failedItems.length > 0) {
+        return buildBulkFailureResponse(taskType, failedItems, tasks.length);
+      }
+
+      const createdTasks = await config.model.insertMany(
+        preparedTasks.map((task) => task.document),
+        {
+          session,
+          ordered: true,
+        }
+      );
+
+      return buildBulkSuccessResponse(taskType, preparedTasks, createdTasks);
+    });
+
+    if (!result.rolledBack) {
+      console.log(`Engineer created ${result.createdCount} ${taskType} tasks in bulk`);
+    }
+
+    return result;
+  } catch (error) {
+    AppError.rethrow(error, getBulkCreateErrorMessage(taskType));
   }
 };
 
@@ -279,7 +542,9 @@ const getAdminProjectTasks = async (projectId) => {
 
 module.exports = {
   createDailyTask: (payload, user) => createTask("daily", payload, user),
+  createDailyTasksBulk: (tasks, user) => createTasksBulk("daily", tasks, user),
   createMonthlyTask: (payload, user) => createTask("monthly", payload, user),
+  createMonthlyTasksBulk: (tasks, user) => createTasksBulk("monthly", tasks, user),
   getEngineerDailyTasks: (projectId, user, filters) => getProjectTasksForEngineer("daily", projectId, user, filters),
   getEngineerMonthlyTasks: (projectId, user) => getProjectTasksForEngineer("monthly", projectId, user),
   deleteDailyTask: (taskId, user) => deleteTask("daily", taskId, user),

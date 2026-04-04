@@ -7,6 +7,7 @@ const dailyTaskSchema = new mongoose.Schema(
     title: { type: String, required: true },
     date: { type: Date, default: Date.now },
     note: { type: String },
+    fingerprint: { type: String, trim: true },
     status: {
       type: String,
       enum: ["pending", "done", "failed"],
@@ -18,5 +19,7 @@ const dailyTaskSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+dailyTaskSchema.index({ fingerprint: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("DailyTask", dailyTaskSchema);

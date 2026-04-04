@@ -34,6 +34,11 @@ exports.addDailyTask = async (req, res) => {
   return res.status(201).json(task);
 };
 
+exports.addDailyTasksBulk = async (req, res) => {
+  const { statusCode, ...result } = await taskService.createDailyTasksBulk(req.validated.body, req.user);
+  return res.status(statusCode).json(result);
+};
+
 exports.getDailyTasks = async (req, res) => {
   const tasks = await taskService.getEngineerDailyTasks(req.validated.params.projectId, req.user, req.validated.query);
   return res.json(tasks);
@@ -47,6 +52,11 @@ exports.deleteDailyTask = async (req, res) => {
 exports.addMonthlyTask = async (req, res) => {
   const task = await taskService.createMonthlyTask(req.validated.body, req.user);
   return res.status(201).json(task);
+};
+
+exports.addMonthlyTasksBulk = async (req, res) => {
+  const { statusCode, ...result } = await taskService.createMonthlyTasksBulk(req.validated.body, req.user);
+  return res.status(statusCode).json(result);
 };
 
 exports.getMonthlyTasks = async (req, res) => {
