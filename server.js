@@ -3,9 +3,11 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const connectDB = require("./config/mongo");
-const AppError = require("./src/utils/AppError");
 const verifyOrigin = require("./middlewares/verifyOrigin");
+const errorHandler = require("./middlewares/errorHandler");
+const notFound = require("./middlewares/notFound");
 const { clientOrigins } = require("./src/utils/clientOrigins");
+const { sendSuccess } = require("./src/utils/response");
 
 dotenv.config();
 
@@ -52,39 +54,33 @@ app.use("/api/supervisor", require("./routes/supervisor"));
 
 // Production Root Route
 app.get("/", (req, res) => {
-  res.json({ 
-    message: "🚀 Alemam Task Manager API - Production",
-    version: "1.0.0",
-    environment: "production",
-    status: "active"
-  });
+  return sendSuccess(
+    res,
+    {
+      version: "1.0.0",
+      environment: "production",
+      status: "active",
+    },
+    "Alemam Task Manager API - Production"
+  );
 });
 
 // Production Health Check
 app.get("/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    environment: "production",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
+  return sendSuccess(
+    res,
+    {
+      status: "ok",
+      environment: "production",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    },
+    "Health check successful"
+  );
 });
 
-// Error Handling for Production
-app.use((err, req, res, next) => {
-  console.error('Production Error:', err);
-
-  if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
-      message: err.message,
-    });
-  }
-
-  res.status(500).json({ 
-    error: 'Internal Server Error',
-    environment: 'production'
-  });
-});
+app.use(notFound);
+app.use(errorHandler);
 
 // Start server locally فقط
 if (process.env.VERCEL !== "1") {

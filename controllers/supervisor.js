@@ -3,59 +3,66 @@ const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
+const { sendSuccess, extractResultPayload } = require("../src/utils/response");
+const asyncHandler = require("../middlewares/asyncHandler");
 
 const SUPERVISOR_COOKIE_CONFIG = getAuthCookieConfig("supervisor");
 
-exports.supervisorLogin = async (req, res) => {
+exports.supervisorLogin = asyncHandler(async (req, res) => {
   const result = await authService.loginSupervisor(req.validated.body);
-  const { token, ...responseBody } = result;
+  const { token, message, user } = result;
 
   res.cookie(SUPERVISOR_COOKIE_CONFIG.name, token, SUPERVISOR_COOKIE_CONFIG.setOptions);
 
-  return res.json(responseBody);
-};
+  return sendSuccess(res, { user }, message);
+});
 
-exports.supervisorLogout = (req, res) => {
+exports.supervisorLogout = asyncHandler(async (req, res) => {
+  const result = authService.logout("Supervisor logout successful");
+
   res.clearCookie(SUPERVISOR_COOKIE_CONFIG.name, SUPERVISOR_COOKIE_CONFIG.clearOptions);
-  return res.json(authService.logout("Supervisor logout successful"));
-};
 
-exports.getCurrentSupervisorUser = async (req, res) => {
+  return sendSuccess(res, null, result.message);
+});
+
+exports.getCurrentSupervisorUser = asyncHandler(async (req, res) => {
   const result = await authService.getCurrentSupervisorUser(req.user);
-  return res.json(result);
-};
+  return sendSuccess(res, { user: result.user }, result.message);
+});
 
-exports.getSupervisorProjects = async (req, res) => {
+exports.getSupervisorProjects = asyncHandler(async (req, res) => {
   const projects = await projectService.getSupervisorProjects(req.user.id);
-  return res.json(projects);
-};
+  return sendSuccess(res, projects);
+});
 
-exports.getDailyTasks = async (req, res) => {
+exports.getDailyTasks = asyncHandler(async (req, res) => {
   const tasks = await taskService.getSupervisorDailyTasks(req.validated.params.projectId, req.user, req.validated.query);
-  return res.json(tasks);
-};
+  return sendSuccess(res, tasks);
+});
 
-exports.reviewDailyTask = async (req, res) => {
+exports.reviewDailyTask = asyncHandler(async (req, res) => {
   const result = await taskService.reviewDailyTask(req.validated.params.taskId, req.validated.body, req.user);
-  return res.json(result);
-};
+  return sendSuccess(res, { task: result.task }, result.message);
+});
 
-exports.getMonthlyTasks = async (req, res) => {
+exports.getMonthlyTasks = asyncHandler(async (req, res) => {
   const tasks = await taskService.getSupervisorMonthlyTasks(req.validated.params.projectId, req.user, req.validated.query);
-  return res.json(tasks);
-};
+  return sendSuccess(res, tasks);
+});
 
-exports.reviewMonthlyTask = async (req, res) => {
+exports.reviewMonthlyTask = asyncHandler(async (req, res) => {
   const result = await taskService.reviewMonthlyTask(req.validated.params.taskId, req.validated.body, req.user);
-  return res.json(result);
-};
+  return sendSuccess(res, { task: result.task }, result.message);
+});
 
-exports.getDashboardStats = async (req, res) => {
+exports.getDashboardStats = asyncHandler(async (req, res) => {
   const result = await statsService.getSupervisorDashboardStats(req.user);
-  return res.json(result);
-};
+  const { data, message } = extractResultPayload(result, "Supervisor dashboard stats fetched successfully");
+  return sendSuccess(res, data, message);
+});
 
-exports.getProjectStats = async (req, res) => {
+exports.getProjectStats = asyncHandler(async (req, res) => {
   const result = await statsService.getSupervisorProjectStats(req.user);
-  return res.json(result);
-};
+  const { data, message } = extractResultPayload(result, "Supervisor project stats fetched successfully");
+  return sendSuccess(res, data, message);
+});

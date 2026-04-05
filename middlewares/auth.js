@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const AppError = require("../src/utils/AppError");
 const { getAuthCookieConfigForRequest, getCookieValue } = require("../src/utils/authCookie");
 
 const auth = async (req, res, next) => {
@@ -10,7 +11,9 @@ const auth = async (req, res, next) => {
     const token = cookieToken || headerToken;
     
     if (!token) {
-      return res.status(401).json({ message: "No token provided" });
+      return next(new AppError("No token provided", 401, {
+        code: "AUTHENTICATION_REQUIRED",
+      }));
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -21,13 +24,17 @@ const auth = async (req, res, next) => {
     }
 
     if (!decoded.id || !decoded.role) {
-      return res.status(401).json({ message: "Invalid token" });
+      return next(new AppError("Invalid token", 401, {
+        code: "INVALID_TOKEN",
+      }));
     }
 
     const user = await User.findById(decoded.id).select("_id name email role");
 
     if (!user || user.role !== decoded.role) {
-      return res.status(401).json({ message: "Session expired. Please log in again." });
+      return next(new AppError("Session expired. Please log in again.", 401, {
+        code: "SESSION_EXPIRED",
+      }));
     }
 
     req.user = {
@@ -40,7 +47,9 @@ const auth = async (req, res, next) => {
     
     next();
   } catch (err) {
-    res.status(401).json({ message: "Invalid token" });
+    next(new AppError("Invalid token", 401, {
+      code: "INVALID_TOKEN",
+    }));
   }
 };
 

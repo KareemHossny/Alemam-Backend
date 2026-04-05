@@ -4,92 +4,103 @@ const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
+const { sendSuccess, extractResultPayload } = require("../src/utils/response");
+const asyncHandler = require("../middlewares/asyncHandler");
 
 const ADMIN_COOKIE_CONFIG = getAuthCookieConfig("admin");
 
-exports.adminLogin = async (req, res) => {
+exports.adminLogin = asyncHandler(async (req, res) => {
   const result = await authService.loginAdmin(req.validated.body);
-  const { token, ...responseBody } = result;
+  const { token, message, user } = result;
 
   res.cookie(ADMIN_COOKIE_CONFIG.name, token, ADMIN_COOKIE_CONFIG.setOptions);
 
-  return res.json(responseBody);
-};
+  return sendSuccess(res, { user }, message);
+});
 
-exports.adminLogout = (req, res) => {
+exports.adminLogout = asyncHandler(async (req, res) => {
+  const result = authService.logout("Logout successful");
+
   res.clearCookie(ADMIN_COOKIE_CONFIG.name, ADMIN_COOKIE_CONFIG.clearOptions);
-  return res.json(authService.logout("Logout successful"));
-};
 
-exports.getCurrentAdminUser = async (req, res) => {
+  return sendSuccess(res, null, result.message);
+});
+
+exports.getCurrentAdminUser = asyncHandler(async (req, res) => {
   const result = await authService.getCurrentAdminUser();
-  return res.json(result);
-};
+  return sendSuccess(res, { user: result.user }, result.message);
+});
 
-exports.createUser = async (req, res) => {
+exports.createUser = asyncHandler(async (req, res) => {
   const result = await userService.createUser(req.validated.body);
-  return res.status(201).json(result);
-};
+  return sendSuccess(res, { user: result.user }, result.message, 201);
+});
 
-exports.getAllUsers = async (req, res) => {
+exports.getAllUsers = asyncHandler(async (req, res) => {
   const users = await userService.getAllUsers();
-  return res.json(users);
-};
+  return sendSuccess(res, users);
+});
 
-exports.deleteUser = async (req, res) => {
+exports.deleteUser = asyncHandler(async (req, res) => {
   const result = await userService.deleteUser(req.validated.params.id);
-  return res.json(result);
-};
+  return sendSuccess(res, null, result.message);
+});
 
-exports.createProject = async (req, res) => {
+exports.createProject = asyncHandler(async (req, res) => {
   const result = await projectService.createProject(req.validated.body);
-  return res.status(201).json(result);
-};
+  const { data, message } = extractResultPayload(result, "Project created successfully");
+  return sendSuccess(res, data, message, 201);
+});
 
-exports.getAllProjects = async (req, res) => {
+exports.getAllProjects = asyncHandler(async (req, res) => {
   const projects = await projectService.getAllProjects();
-  return res.json(projects);
-};
+  return sendSuccess(res, projects);
+});
 
-exports.getProjectById = async (req, res) => {
+exports.getProjectById = asyncHandler(async (req, res) => {
   const result = await projectService.getProjectById(req.validated.params.id);
-  return res.json(result);
-};
+  const { data, message } = extractResultPayload(result, "Project fetched successfully");
+  return sendSuccess(res, data, message);
+});
 
-exports.updateProject = async (req, res) => {
+exports.updateProject = asyncHandler(async (req, res) => {
   const result = await projectService.updateProject(req.validated.params.id, req.validated.body);
-  return res.json(result);
-};
+  const { data, message } = extractResultPayload(result, "Project updated successfully");
+  return sendSuccess(res, data, message);
+});
 
-exports.deleteProject = async (req, res) => {
+exports.deleteProject = asyncHandler(async (req, res) => {
   const result = await projectService.deleteProject(req.validated.params.projectId);
-  return res.json(result);
-};
+  const { message, ...data } = result;
+  return sendSuccess(res, data, message);
+});
 
-exports.getAllDailyTasks = async (req, res) => {
+exports.getAllDailyTasks = asyncHandler(async (req, res) => {
   const tasks = await taskService.getAllDailyTasks(req.validated.query);
-  return res.json(tasks);
-};
+  return sendSuccess(res, tasks);
+});
 
-exports.getAllMonthlyTasks = async (req, res) => {
+exports.getAllMonthlyTasks = asyncHandler(async (req, res) => {
   const tasks = await taskService.getAllMonthlyTasks(req.validated.query);
-  return res.json(tasks);
-};
+  return sendSuccess(res, tasks);
+});
 
-exports.getProjectTasks = async (req, res) => {
+exports.getProjectTasks = asyncHandler(async (req, res) => {
   const result = await taskService.getAdminProjectTasks(req.validated.params.projectId);
-  return res.json(result);
-};
+  return sendSuccess(res, result);
+});
 
-exports.getTaskStats = async (req, res) => {
+exports.getTaskStats = asyncHandler(async (req, res) => {
   const result = await statsService.getAdminTaskStats(req.validated.query);
-  return res.json(result);
-};
+  const { data, message } = extractResultPayload(result, "Task stats fetched successfully");
+  return sendSuccess(res, data, message);
+});
 
-exports.getProjectStats = async (req, res) => {
+exports.getProjectStats = asyncHandler(async (req, res) => {
   const result = await statsService.getAdminProjectStats(
     req.validated.params.projectId,
     req.validated.query
   );
-  return res.json(result);
-};
+  const { data, message } = extractResultPayload(result, "Project task stats fetched successfully");
+  return sendSuccess(res, data, message);
+});

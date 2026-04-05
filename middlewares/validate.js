@@ -21,6 +21,13 @@ const formatValidationMessage = (error) => {
   return `Validation error: ${messages.join("; ")}`;
 };
 
+const formatValidationDetails = (error) =>
+  error.issues.map((issue) => ({
+    path: issue.path.slice(1).join(".") || issue.path[0] || null,
+    message: issue.message,
+    code: issue.code,
+  }));
+
 const resolveSchemas = (schemas, req) => {
   if (typeof schemas === "function") {
     return schemas(req);
@@ -46,7 +53,10 @@ const validate = (schemas = {}) => {
       });
 
       if (!result.success) {
-        throw new AppError(formatValidationMessage(result.error), 400);
+        throw new AppError(formatValidationMessage(result.error), 400, {
+          code: "VALIDATION_ERROR",
+          details: formatValidationDetails(result.error),
+        });
       }
 
       req.body = result.data.body;

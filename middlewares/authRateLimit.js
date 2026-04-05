@@ -1,4 +1,6 @@
 const rateLimit = require("express-rate-limit");
+const AppError = require("../src/utils/AppError");
+const { sendError } = require("../src/utils/response");
 
 const FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000;
 
@@ -18,11 +20,19 @@ const createAuthRateLimiter = ({ limit, routeLabel }) =>
     legacyHeaders: false,
     skipSuccessfulRequests: true,
     handler: (req, res, _next, options) => {
-      return res.status(options.statusCode).json({
-        message: `Too many ${routeLabel} login attempts. Please try again in 15 minutes.`,
-        code: "AUTH_RATE_LIMITED",
-        retryAfterSeconds: getRetryAfterSeconds(req, options.windowMs),
-      });
+      return sendError(
+        res,
+        new AppError(
+          `Too many ${routeLabel} login attempts. Please try again in 15 minutes.`,
+          options.statusCode,
+          {
+            code: "AUTH_RATE_LIMITED",
+            details: {
+              retryAfterSeconds: getRetryAfterSeconds(req, options.windowMs),
+            },
+          }
+        )
+      );
     },
   });
 
