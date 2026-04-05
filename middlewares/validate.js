@@ -21,30 +21,43 @@ const formatValidationMessage = (error) => {
   return `Validation error: ${messages.join("; ")}`;
 };
 
+const resolveSchemas = (schemas, req) => {
+  if (typeof schemas === "function") {
+    return schemas(req);
+  }
+
+  return schemas || {};
+};
+
 const validate = (schemas = {}) => {
-  const requestSchema = z.object({
-    body: schemas.body || emptyObjectSchema,
-    params: schemas.params || emptyObjectSchema,
-    query: schemas.query || emptyObjectSchema,
-  });
+  return async (req, res, next) => {
+    try {
+      const resolvedSchemas = resolveSchemas(schemas, req);
+      const requestSchema = z.object({
+        body: resolvedSchemas.body || emptyObjectSchema,
+        params: resolvedSchemas.params || emptyObjectSchema,
+        query: resolvedSchemas.query || emptyObjectSchema,
+      });
 
-  return (req, res, next) => {
-    const result = requestSchema.safeParse({
-      body: req.body || {},
-      params: req.params || {},
-      query: req.query || {},
-    });
+      const result = await requestSchema.safeParseAsync({
+        body: req.body || {},
+        params: req.params || {},
+        query: req.query || {},
+      });
 
-    if (!result.success) {
-      throw new AppError(formatValidationMessage(result.error), 400);
+      if (!result.success) {
+        throw new AppError(formatValidationMessage(result.error), 400);
+      }
+
+      req.body = result.data.body;
+      req.params = result.data.params;
+      req.query = result.data.query;
+      req.validated = result.data;
+
+      return next();
+    } catch (error) {
+      return next(error);
     }
-
-    req.body = result.data.body;
-    req.params = result.data.params;
-    req.query = result.data.query;
-    req.validated = result.data;
-
-    return next();
   };
 };
 
