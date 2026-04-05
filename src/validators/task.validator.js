@@ -244,6 +244,7 @@ module.exports = {
   DEFAULT_TASKS_LIMIT,
   DEFAULT_TASKS_PAGE,
   MAX_TASKS_LIMIT,
+  adminTaskListQuerySchema,
   createDailyTaskSchema,
   createDailyTasksBulkSchema,
   createMonthlyTaskSchema,

@@ -63,6 +63,16 @@ const buildPagination = ({ total, page, limit }) => ({
   limit,
 });
 
+const buildApiPagination = ({ total, page, limit }) => {
+  const pagination = buildPagination({ total, page, limit });
+
+  return {
+    page: pagination.page,
+    totalPages: pagination.pages,
+    total: pagination.total,
+  };
+};
+
 const buildStatusSummary = (statusBuckets = []) => {
   const summary = {
     pending: 0,
@@ -622,36 +632,75 @@ const getAllTasks = async (taskType, filters = {}) => {
   }
 };
 
-const getAdminProjectTasks = async (projectId) => {
+const getAdminProjectTasks = async (projectId, filters = {}) => {
   try {
-    const [dailyTasks, monthlyTasks, project] = await Promise.all([
-      applyPopulate(
-        DailyTask.find({ project: projectId })
-          .select(TASK_SELECT)
-          .sort({ createdAt: -1 }),
-        [
-          { path: "project", select: "name scopeOfWork" },
-          { path: "createdBy", select: "name email role" },
-          { path: "reviewedBy", select: "name email" },
-        ]
-      ),
-      applyPopulate(
-        MonthlyTask.find({ project: projectId })
-          .select(TASK_SELECT)
-          .sort({ date: -1 }),
-        [
-          { path: "project", select: "name scopeOfWork" },
-          { path: "createdBy", select: "name email role" },
-          { path: "reviewedBy", select: "name email" },
-        ]
-      ),
-      Project.findById(projectId).select("name scopeOfWork").lean(),
+    await getProjectOrThrow(projectId, {
+      message: "Project not found",
+      statusCode: 404,
+    });
+
+    const { page, limit, skip } = normalizePagination(filters);
+    const aggregateMatch = buildAggregationTaskMatch(filters, { projectId });
+    const taskProjection = {
+      _id: 1,
+      project: 1,
+      createdBy: 1,
+      title: 1,
+      date: 1,
+      note: 1,
+      status: 1,
+      supervisorNote: 1,
+      reviewedBy: 1,
+      reviewedAt: 1,
+      createdAt: 1,
+    };
+
+    const [aggregateResult] = await DailyTask.aggregate([
+      { $match: aggregateMatch },
+      {
+        $project: {
+          ...taskProjection,
+          taskType: { $literal: "daily" },
+        },
+      },
+      {
+        $unionWith: {
+          coll: MonthlyTask.collection.name,
+          pipeline: [
+            { $match: aggregateMatch },
+            {
+              $project: {
+                ...taskProjection,
+                taskType: { $literal: "monthly" },
+              },
+            },
+          ],
+        },
+      },
+      {
+        $facet: {
+          tasks: [
+            { $sort: { date: -1, createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+          ],
+          meta: [
+            { $count: "total" },
+          ],
+        },
+      },
+    ]);
+
+    const total = aggregateResult?.meta?.[0]?.total || 0;
+    const tasks = await DailyTask.populate(aggregateResult?.tasks || [], [
+      { path: "project", select: "name scopeOfWork" },
+      { path: "createdBy", select: "name email role" },
+      { path: "reviewedBy", select: "name email" },
     ]);
 
     return {
-      dailyTasks,
-      monthlyTasks,
-      project,
+      tasks,
+      pagination: buildApiPagination({ total, page, limit }),
     };
   } catch (error) {
     AppError.rethrow(error, "Error fetching project tasks");

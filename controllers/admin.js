@@ -72,7 +72,10 @@ exports.getAllMonthlyTasks = asyncHandler(async (req, res) => {
 });
 
 exports.getProjectTasks = asyncHandler(async (req, res) => {
-  const result = await taskService.getAdminProjectTasks(req.validated.params.projectId);
+  const result = await taskService.getAdminProjectTasks(
+    req.validated.params.projectId,
+    req.validated.query
+  );
   return sendSuccess(res, result);
 });
 

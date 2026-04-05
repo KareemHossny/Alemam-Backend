@@ -8,6 +8,9 @@ const projectSchema = new mongoose.Schema({
   supervisors: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 });
 
+projectSchema.index({ engineers: 1 });
+projectSchema.index({ supervisors: 1 });
+
 projectSchema.pre("save", async function validateAssignmentsBeforeSave(next) {
   try {
     if (!this.isNew && !this.isModified("engineers") && !this.isModified("supervisors")) {

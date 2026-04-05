@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { noInputSchema, objectId, requiredText, strictObject } = require("./common");
+const { adminTaskListQuerySchema } = require("./task.validator");
 const { inspectProjectAssignments, normalizeIds } = require("../utils/referenceIntegrity");
 
 const buildAssignmentArraySchema = (fieldName) =>
@@ -127,7 +128,7 @@ const getProjectTasksSchema = {
   params: strictObject({
     projectId: objectId("projectId"),
   }),
-  query: noInputSchema,
+  query: adminTaskListQuerySchema,
 };
 
 const listProjectsSchema = {

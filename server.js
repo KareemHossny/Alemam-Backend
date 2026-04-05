@@ -13,6 +13,15 @@ const { sendSuccess } = require("./src/core/utils/response");
 
 const app = express();
 
+const parseOriginList = (value = "") =>
+  value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const csrfAllowedOrigins = parseOriginList(process.env.CSRF_ALLOWED_ORIGINS);
+const csrfOriginAllowlist = csrfAllowedOrigins.length > 0 ? csrfAllowedOrigins : clientOrigins;
+
 // Trust the configured proxy hops so req.ip reflects the real client IP.
 app.set("trust proxy", config.app.trustProxyHops);
 
@@ -35,7 +44,9 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(verifyOrigin);
+app.use(verifyOrigin({
+  allowedOrigins: csrfOriginAllowlist,
+}));
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
