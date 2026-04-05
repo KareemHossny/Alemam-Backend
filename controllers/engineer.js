@@ -60,7 +60,7 @@ exports.addMonthlyTasksBulk = async (req, res) => {
 };
 
 exports.getMonthlyTasks = async (req, res) => {
-  const tasks = await taskService.getEngineerMonthlyTasks(req.validated.params.projectId, req.user);
+  const tasks = await taskService.getEngineerMonthlyTasks(req.validated.params.projectId, req.user, req.validated.query);
   return res.json(tasks);
 };
 

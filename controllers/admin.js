@@ -66,12 +66,12 @@ exports.deleteProject = async (req, res) => {
 };
 
 exports.getAllDailyTasks = async (req, res) => {
-  const tasks = await taskService.getAllDailyTasks();
+  const tasks = await taskService.getAllDailyTasks(req.validated.query);
   return res.json(tasks);
 };
 
 exports.getAllMonthlyTasks = async (req, res) => {
-  const tasks = await taskService.getAllMonthlyTasks();
+  const tasks = await taskService.getAllMonthlyTasks(req.validated.query);
   return res.json(tasks);
 };
 

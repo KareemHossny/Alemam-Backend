@@ -21,5 +21,7 @@ const monthlyTaskSchema = new mongoose.Schema(
 );
 
 monthlyTaskSchema.index({ fingerprint: 1 }, { unique: true, sparse: true });
+monthlyTaskSchema.index({ project: 1, status: 1, date: -1 });
+monthlyTaskSchema.index({ createdBy: 1, status: 1, date: -1 });
 
 module.exports = mongoose.model("MonthlyTask", monthlyTaskSchema);

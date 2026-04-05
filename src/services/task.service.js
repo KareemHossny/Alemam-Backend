@@ -20,7 +20,7 @@ const TASK_CONFIG = {
     notFoundMessage: "Daily task not found",
     deleteSuccessMessage: "Daily task deleted successfully",
     reviewSuccessMessage: "Daily task reviewed successfully",
-    sort: { createdAt: -1 },
+    sort: { date: -1, createdAt: -1 },
   },
   monthly: {
     model: MonthlyTask,
@@ -32,7 +32,7 @@ const TASK_CONFIG = {
     notFoundMessage: "Monthly task not found",
     deleteSuccessMessage: "Monthly task deleted successfully",
     reviewSuccessMessage: "Monthly task reviewed successfully",
-    sort: { date: -1 },
+    sort: { date: -1, createdAt: -1 },
   },
 };
 
@@ -52,7 +52,7 @@ const normalizeUtcDateOnly = (dateString) => {
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
 };
 
-const buildDailyTaskDateFilter = (dateString) => {
+const buildDayRangeFilter = (dateString) => {
   const start = normalizeUtcDateOnly(dateString);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
@@ -63,14 +63,130 @@ const buildDailyTaskDateFilter = (dateString) => {
   };
 };
 
-const buildTaskQuery = (taskType, projectId, filters = {}) => {
-  const query = { project: projectId };
+const getExclusiveEndDate = (dateString) => {
+  const endDate = normalizeUtcDateOnly(dateString);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+  return endDate;
+};
 
-  if (taskType === "daily" && filters?.date) {
-    query.date = buildDailyTaskDateFilter(filters.date);
+const buildTaskDateFilter = (filters = {}) => {
+  if (filters.date) {
+    return buildDayRangeFilter(filters.date);
+  }
+
+  const rangeFilter = {};
+
+  if (filters.dateFrom) {
+    rangeFilter.$gte = normalizeUtcDateOnly(filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    rangeFilter.$lt = getExclusiveEndDate(filters.dateTo);
+  }
+
+  return Object.keys(rangeFilter).length > 0 ? rangeFilter : undefined;
+};
+
+const buildTaskQuery = (filters = {}) => {
+  const query = {};
+
+  if (filters.projectId) {
+    query.project = filters.projectId;
+  }
+
+  if (filters.status) {
+    query.status = filters.status;
+  }
+
+  if (filters.userId) {
+    query.createdBy = filters.userId;
+  }
+
+  const dateFilter = buildTaskDateFilter(filters);
+  if (dateFilter) {
+    query.date = dateFilter;
   }
 
   return query;
+};
+
+const normalizePagination = (filters = {}) => {
+  const page = Number(filters.page) || 1;
+  const limit = Number(filters.limit) || 20;
+
+  return {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+  };
+};
+
+const buildPagination = ({ total, page, limit }) => ({
+  total,
+  page,
+  pages: total === 0 ? 0 : Math.ceil(total / limit),
+  limit,
+});
+
+const buildStatusSummary = (statusBuckets = []) => {
+  const summary = {
+    pending: 0,
+    done: 0,
+    failed: 0,
+  };
+
+  statusBuckets.forEach(({ _id, count }) => {
+    if (_id && summary[_id] !== undefined) {
+      summary[_id] = count;
+    }
+  });
+
+  return summary;
+};
+
+const applyPopulate = (query, populate = []) => {
+  let nextQuery = query;
+
+  populate.forEach((populateConfig) => {
+    nextQuery = nextQuery.populate(populateConfig.path, populateConfig.select);
+  });
+
+  return nextQuery;
+};
+
+const getPaginatedTasks = async ({ taskType, filters = {}, populate = [] }) => {
+  const config = getTaskConfig(taskType);
+  const { page, limit, skip } = normalizePagination(filters);
+  const query = buildTaskQuery(filters);
+
+  const [total, statusBuckets, tasks] = await Promise.all([
+    config.model.countDocuments(query),
+    config.model.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    applyPopulate(
+      config.model
+        .find(query)
+        .sort(config.sort)
+        .skip(skip)
+        .limit(limit),
+      populate
+    ),
+  ]);
+
+  return {
+    data: tasks,
+    pagination: buildPagination({ total, page, limit }),
+    summary: {
+      statusCounts: buildStatusSummary(statusBuckets),
+    },
+  };
 };
 
 const getProjectOrThrow = async (projectId, { message, statusCode }, options = {}) => {
@@ -395,8 +511,6 @@ const createTasksBulk = async (taskType, tasks, user) => {
 };
 
 const getProjectTasksForEngineer = async (taskType, projectId, user, filters = {}) => {
-  const config = getTaskConfig(taskType);
-
   try {
     const project = await getProjectOrThrow(projectId, {
       message: "Access denied to this project",
@@ -407,13 +521,19 @@ const getProjectTasksForEngineer = async (taskType, projectId, user, filters = {
       throw new AppError("Access denied to this project", 403);
     }
 
-    return await config.model
-      .find(buildTaskQuery(taskType, projectId, filters))
-      .populate("createdBy", "name email")
-      .populate("reviewedBy", "name email")
-      .sort(config.sort);
+    return await getPaginatedTasks({
+      taskType,
+      filters: {
+        ...filters,
+        projectId,
+      },
+      populate: [
+        { path: "createdBy", select: "name email" },
+        { path: "reviewedBy", select: "name email" },
+      ],
+    });
   } catch (error) {
-    AppError.rethrow(error, config.fetchError);
+    AppError.rethrow(error, getTaskConfig(taskType).fetchError);
   }
 };
 
@@ -441,8 +561,6 @@ const deleteTask = async (taskType, taskId, user) => {
 };
 
 const getProjectTasksForSupervisor = async (taskType, projectId, user, filters = {}) => {
-  const config = getTaskConfig(taskType);
-
   try {
     const project = await getProjectOrThrow(projectId, {
       message: "Access denied to this project",
@@ -453,12 +571,18 @@ const getProjectTasksForSupervisor = async (taskType, projectId, user, filters =
       throw new AppError("Access denied to this project", 403);
     }
 
-    return await config.model
-      .find(buildTaskQuery(taskType, projectId, filters))
-      .populate("createdBy", "name email")
-      .sort(config.sort);
+    return await getPaginatedTasks({
+      taskType,
+      filters: {
+        ...filters,
+        projectId,
+      },
+      populate: [
+        { path: "createdBy", select: "name email" },
+      ],
+    });
   } catch (error) {
-    AppError.rethrow(error, config.fetchError);
+    AppError.rethrow(error, getTaskConfig(taskType).fetchError);
   }
 };
 
@@ -501,18 +625,19 @@ const reviewTask = async (taskType, taskId, reviewData, user) => {
   }
 };
 
-const getAllTasks = async (taskType) => {
-  const config = getTaskConfig(taskType);
-
+const getAllTasks = async (taskType, filters = {}) => {
   try {
-    return await config.model
-      .find()
-      .populate("project", "name scopeOfWork")
-      .populate("createdBy", "name email role")
-      .populate("reviewedBy", "name email")
-      .sort(config.sort);
+    return await getPaginatedTasks({
+      taskType,
+      filters,
+      populate: [
+        { path: "project", select: "name scopeOfWork" },
+        { path: "createdBy", select: "name email role" },
+        { path: "reviewedBy", select: "name email" },
+      ],
+    });
   } catch (error) {
-    AppError.rethrow(error, config.adminFetchError);
+    AppError.rethrow(error, getTaskConfig(taskType).adminFetchError);
   }
 };
 
@@ -546,14 +671,14 @@ module.exports = {
   createMonthlyTask: (payload, user) => createTask("monthly", payload, user),
   createMonthlyTasksBulk: (tasks, user) => createTasksBulk("monthly", tasks, user),
   getEngineerDailyTasks: (projectId, user, filters) => getProjectTasksForEngineer("daily", projectId, user, filters),
-  getEngineerMonthlyTasks: (projectId, user) => getProjectTasksForEngineer("monthly", projectId, user),
+  getEngineerMonthlyTasks: (projectId, user, filters) => getProjectTasksForEngineer("monthly", projectId, user, filters),
   deleteDailyTask: (taskId, user) => deleteTask("daily", taskId, user),
   deleteMonthlyTask: (taskId, user) => deleteTask("monthly", taskId, user),
   getSupervisorDailyTasks: (projectId, user, filters) => getProjectTasksForSupervisor("daily", projectId, user, filters),
-  getSupervisorMonthlyTasks: (projectId, user) => getProjectTasksForSupervisor("monthly", projectId, user),
+  getSupervisorMonthlyTasks: (projectId, user, filters) => getProjectTasksForSupervisor("monthly", projectId, user, filters),
   reviewDailyTask: (taskId, reviewData, user) => reviewTask("daily", taskId, reviewData, user),
   reviewMonthlyTask: (taskId, reviewData, user) => reviewTask("monthly", taskId, reviewData, user),
-  getAllDailyTasks: () => getAllTasks("daily"),
-  getAllMonthlyTasks: () => getAllTasks("monthly"),
+  getAllDailyTasks: (filters) => getAllTasks("daily", filters),
+  getAllMonthlyTasks: (filters) => getAllTasks("monthly", filters),
   getAdminProjectTasks,
 };

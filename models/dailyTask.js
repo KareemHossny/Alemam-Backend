@@ -21,5 +21,7 @@ const dailyTaskSchema = new mongoose.Schema(
 );
 
 dailyTaskSchema.index({ fingerprint: 1 }, { unique: true, sparse: true });
+dailyTaskSchema.index({ project: 1, status: 1, date: -1 });
+dailyTaskSchema.index({ createdBy: 1, status: 1, date: -1 });
 
 module.exports = mongoose.model("DailyTask", dailyTaskSchema);

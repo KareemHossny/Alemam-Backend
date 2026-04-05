@@ -5,6 +5,9 @@ const { buildTaskFingerprint } = require("../utils/taskFingerprint");
 const { getUserId } = require("../policies/role.policy");
 
 const BULK_TASK_LIMIT = 50;
+const DEFAULT_TASKS_PAGE = 1;
+const DEFAULT_TASKS_LIMIT = 20;
+const MAX_TASKS_LIMIT = 100;
 
 const reviewStatusSchema = z
   .enum(["pending", "done", "failed", "approved", "rejected"])
@@ -19,6 +22,60 @@ const reviewStatusSchema = z
 
     return status;
   });
+
+const taskStatusSchema = z.enum(["pending", "done", "failed"], {
+  errorMap: () => ({ message: "status must be pending, done, or failed" }),
+});
+
+const positiveIntegerWithDefault = (fieldName, defaultValue, maxValue) =>
+  z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") {
+      return defaultValue;
+    }
+
+    if (typeof value === "number") {
+      return value;
+    }
+
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? value : parsed;
+  }, z
+    .number({
+      invalid_type_error: `${fieldName} must be a number`,
+    })
+    .int(`${fieldName} must be an integer`)
+    .min(1, `${fieldName} must be at least 1`)
+    .max(maxValue, `${fieldName} must be at most ${maxValue}`));
+
+const baseTaskListQuerySchema = strictObject({
+  page: positiveIntegerWithDefault("page", DEFAULT_TASKS_PAGE, 100000),
+  limit: positiveIntegerWithDefault("limit", DEFAULT_TASKS_LIMIT, MAX_TASKS_LIMIT),
+  status: taskStatusSchema.optional(),
+  userId: objectId("userId").optional(),
+  date: isoDate("date").optional(),
+  dateFrom: isoDate("dateFrom").optional(),
+  dateTo: isoDate("dateTo").optional(),
+}).superRefine((query, ctx) => {
+  if (query.date && (query.dateFrom || query.dateTo)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["date"],
+      message: "Use either date or dateFrom/dateTo, not both",
+    });
+  }
+
+  if (query.dateFrom && query.dateTo && query.dateFrom > query.dateTo) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["dateTo"],
+      message: "dateTo must be on or after dateFrom",
+    });
+  }
+});
+
+const adminTaskListQuerySchema = baseTaskListQuerySchema.extend({
+  projectId: objectId("projectId").optional(),
+});
 
 const buildTaskBodySchema = (dateSchema) =>
   strictObject({
@@ -158,12 +215,10 @@ const buildTaskListSchema = (querySchema) => (req) => ({
   query: querySchema,
 });
 
-const getTasksByProjectSchema = buildTaskListSchema(noInputSchema);
+const getTasksByProjectSchema = buildTaskListSchema(baseTaskListQuerySchema);
 
 const getDailyTasksByProjectSchema = buildTaskListSchema(
-  strictObject({
-    date: isoDate("date").optional(),
-  })
+  baseTaskListQuerySchema
 );
 
 const deleteTaskSchema = {
@@ -184,11 +239,14 @@ const reviewTaskSchema = {
 const listTasksSchema = {
   body: noInputSchema,
   params: noInputSchema,
-  query: noInputSchema,
+  query: adminTaskListQuerySchema,
 };
 
 module.exports = {
   BULK_TASK_LIMIT,
+  DEFAULT_TASKS_LIMIT,
+  DEFAULT_TASKS_PAGE,
+  MAX_TASKS_LIMIT,
   createDailyTaskSchema,
   createDailyTasksBulkSchema,
   createMonthlyTaskSchema,
