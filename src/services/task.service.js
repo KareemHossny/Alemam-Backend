@@ -9,6 +9,7 @@ const { buildTaskFingerprint } = require("../utils/taskFingerprint");
 const {
   normalizeUtcDateOnly,
   buildTaskQuery,
+  buildAggregationTaskMatch,
 } = require("../utils/taskQuery");
 
 const TASK_CONFIG = {
@@ -41,6 +42,7 @@ const TASK_CONFIG = {
 const getTaskConfig = (taskType) => TASK_CONFIG[taskType];
 
 const getBulkCreateErrorMessage = (taskType) => `Error creating ${taskType} tasks`;
+const TASK_SELECT = "project createdBy title date note status supervisorNote reviewedBy reviewedAt createdAt";
 
 const normalizePagination = (filters = {}) => {
   const page = Number(filters.page) || 1;
@@ -76,25 +78,31 @@ const buildStatusSummary = (statusBuckets = []) => {
   return summary;
 };
 
-const applyPopulate = (query, populate = []) => {
+const applyPopulate = (query, populate = [], options = {}) => {
+  const { lean = true } = options;
   let nextQuery = query;
 
   populate.forEach((populateConfig) => {
-    nextQuery = nextQuery.populate(populateConfig.path, populateConfig.select);
+    nextQuery = nextQuery.populate({
+      path: populateConfig.path,
+      select: populateConfig.select,
+      options: populateConfig.options,
+    });
   });
 
-  return nextQuery;
+  return lean ? nextQuery.lean() : nextQuery;
 };
 
 const getPaginatedTasks = async ({ taskType, filters = {}, populate = [] }) => {
   const config = getTaskConfig(taskType);
   const { page, limit, skip } = normalizePagination(filters);
   const query = buildTaskQuery(filters);
+  const aggregateMatch = buildAggregationTaskMatch(filters);
 
   const [total, statusBuckets, tasks] = await Promise.all([
     config.model.countDocuments(query),
     config.model.aggregate([
-      { $match: query },
+      { $match: aggregateMatch },
       {
         $group: {
           _id: "$status",
@@ -105,6 +113,7 @@ const getPaginatedTasks = async ({ taskType, filters = {}, populate = [] }) => {
     applyPopulate(
       config.model
         .find(query)
+        .select(TASK_SELECT)
         .sort(config.sort)
         .skip(skip)
         .limit(limit),
@@ -460,6 +469,7 @@ const getProjectTasksForEngineer = async (taskType, projectId, user, filters = {
         projectId,
       },
       populate: [
+        { path: "project", select: "name scopeOfWork" },
         { path: "createdBy", select: "name email" },
         { path: "reviewedBy", select: "name email" },
       ],
@@ -510,7 +520,8 @@ const getProjectTasksForSupervisor = async (taskType, projectId, user, filters =
         projectId,
       },
       populate: [
-        { path: "createdBy", select: "name email" },
+        { path: "project", select: "name scopeOfWork" },
+        { path: "createdBy", select: "name email role" },
       ],
     });
   } catch (error) {
@@ -576,15 +587,27 @@ const getAllTasks = async (taskType, filters = {}) => {
 const getAdminProjectTasks = async (projectId) => {
   try {
     const [dailyTasks, monthlyTasks, project] = await Promise.all([
-      DailyTask.find({ project: projectId })
-        .populate("createdBy", "name email role")
-        .populate("reviewedBy", "name email")
-        .sort({ createdAt: -1 }),
-      MonthlyTask.find({ project: projectId })
-        .populate("createdBy", "name email role")
-        .populate("reviewedBy", "name email")
-        .sort({ date: -1 }),
-      Project.findById(projectId).select("name scopeOfWork"),
+      applyPopulate(
+        DailyTask.find({ project: projectId })
+          .select(TASK_SELECT)
+          .sort({ createdAt: -1 }),
+        [
+          { path: "project", select: "name scopeOfWork" },
+          { path: "createdBy", select: "name email role" },
+          { path: "reviewedBy", select: "name email" },
+        ]
+      ),
+      applyPopulate(
+        MonthlyTask.find({ project: projectId })
+          .select(TASK_SELECT)
+          .sort({ date: -1 }),
+        [
+          { path: "project", select: "name scopeOfWork" },
+          { path: "createdBy", select: "name email role" },
+          { path: "reviewedBy", select: "name email" },
+        ]
+      ),
+      Project.findById(projectId).select("name scopeOfWork").lean(),
     ]);
 
     return {

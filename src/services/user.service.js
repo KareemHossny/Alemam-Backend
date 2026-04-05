@@ -39,7 +39,7 @@ const createUser = async ({ name, email, password, role }) => {
 
 const getAllUsers = async () => {
   try {
-    return await User.find().select("-password -deletedAt -isDeleted");
+    return await User.find().select("-password -deletedAt -isDeleted").lean();
   } catch (error) {
     AppError.rethrow(error, "Error fetching users");
   }

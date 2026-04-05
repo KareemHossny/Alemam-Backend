@@ -5,7 +5,15 @@ const AppError = require("../utils/AppError");
 const { normalizeIds, syncProjectAssignments } = require("../utils/referenceIntegrity");
 const runInTransaction = require("../utils/runInTransaction");
 
-const populateProjectQuery = (query) => query.populate("engineers", "name email").populate("supervisors", "name email");
+const PROJECT_SELECT = "name scopeOfWork engineers supervisors";
+const PROJECT_USER_SELECT = "name email";
+
+const populateProjectQuery = (query) =>
+  query
+    .select(PROJECT_SELECT)
+    .populate("engineers", PROJECT_USER_SELECT)
+    .populate("supervisors", PROJECT_USER_SELECT)
+    .lean();
 
 const getPopulatedProjectById = (projectId) => populateProjectQuery(Project.findById(projectId));
 
@@ -19,13 +27,13 @@ const getAssignedProjects = async ({ userId, assignmentField, populateUsers, err
   try {
     let query = Project.find({
       [assignmentField]: userId,
-    }).select("name scopeOfWork engineers supervisors");
+    }).select(PROJECT_SELECT);
 
     if (populateUsers) {
       query = query.populate("engineers", "name email").populate("supervisors", "name email");
     }
 
-    return await query;
+    return await query.lean();
   } catch (error) {
     AppError.rethrow(error, errorMessage);
   }
