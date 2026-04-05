@@ -3,11 +3,11 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const connectDB = require("./config/mongo");
-const verifyOrigin = require("./middlewares/verifyOrigin");
-const errorHandler = require("./middlewares/errorHandler");
-const notFound = require("./middlewares/notFound");
+const verifyOrigin = require("./src/core/middleware/verifyOrigin");
+const errorHandler = require("./src/core/middleware/errorHandler");
+const notFound = require("./src/core/middleware/notFound");
 const { clientOrigins } = require("./src/utils/clientOrigins");
-const { sendSuccess } = require("./src/utils/response");
+const { sendSuccess } = require("./src/core/utils/response");
 
 dotenv.config();
 

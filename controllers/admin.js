@@ -1,5 +1,4 @@
 const authService = require("../src/services/auth.service");
-const userService = require("../src/services/user.service");
 const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
@@ -29,21 +28,6 @@ exports.adminLogout = asyncHandler(async (req, res) => {
 exports.getCurrentAdminUser = asyncHandler(async (req, res) => {
   const result = await authService.getCurrentAdminUser();
   return sendSuccess(res, { user: result.user }, result.message);
-});
-
-exports.createUser = asyncHandler(async (req, res) => {
-  const result = await userService.createUser(req.validated.body);
-  return sendSuccess(res, { user: result.user }, result.message, 201);
-});
-
-exports.getAllUsers = asyncHandler(async (req, res) => {
-  const users = await userService.getAllUsers();
-  return sendSuccess(res, users);
-});
-
-exports.deleteUser = asyncHandler(async (req, res) => {
-  const result = await userService.deleteUser(req.validated.params.id);
-  return sendSuccess(res, null, result.message);
 });
 
 exports.createProject = asyncHandler(async (req, res) => {

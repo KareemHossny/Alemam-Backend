@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const adminController = require("../controllers/admin");
-const auth = require("../middlewares/auth");
-const authorize = require("../middlewares/authorize");
+const auth = require("../src/core/middleware/auth");
+const authorize = require("../src/core/middleware/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
-const validate = require("../middlewares/validate");
+const validate = require("../src/core/middleware/validate");
 const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
 const { adminTaskStatsSchema, adminProjectStatsSchema } = require("../src/validators/stats.validator");
+const userRoutes = require("../src/modules/user/user.routes");
 const {
   createProjectSchema,
   projectByIdSchema,
@@ -15,7 +16,6 @@ const {
   getProjectTasksSchema,
   listProjectsSchema,
 } = require("../src/validators/project.validator");
-const { createUserSchema, deleteUserSchema, listUsersSchema } = require("../src/validators/user.validator");
 const { listTasksSchema } = require("../src/validators/task.validator");
 
 // Public routes
@@ -28,9 +28,7 @@ router.use(authorize(["admin"]));
 
 // Users Management
 router.get("/me", validate(currentUserSchema), adminController.getCurrentAdminUser);
-router.get("/users", validate(listUsersSchema), adminController.getAllUsers);
-router.post("/users", validate(createUserSchema), adminController.createUser);
-router.delete("/users/:id", validate(deleteUserSchema), adminController.deleteUser);
+router.use("/users", userRoutes);
 
 // Projects Management
 router.get("/projects", validate(listProjectsSchema), adminController.getAllProjects);
