@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const config = require("../src/config");
 const AppError = require("../src/utils/AppError");
 const logger = require("../src/utils/logger");
 const { getAuthCookieConfigForRequest, getCookieValue } = require("../src/utils/authCookie");
@@ -23,7 +24,7 @@ const auth = async (req, res, next) => {
       }));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, config.auth.jwtSecret);
 
     if (decoded.role === "admin") {
       req.user = decoded;

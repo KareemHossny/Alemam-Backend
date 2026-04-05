@@ -1,3 +1,5 @@
+const config = require("../config");
+
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
 const AUTH_COOKIE_SCOPES = {
@@ -15,8 +17,6 @@ const AUTH_COOKIE_SCOPES = {
   },
 };
 
-const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
-
 const normalizeSameSite = (value) => {
   if (typeof value !== "string") {
     return null;
@@ -32,11 +32,11 @@ const normalizeSameSite = (value) => {
 };
 
 const getSameSiteValue = () =>
-  normalizeSameSite(process.env.AUTH_COOKIE_SAME_SITE) || (isProduction ? "none" : "lax");
+  normalizeSameSite(config.auth.cookieSameSite) || (config.app.isProduction ? "none" : "lax");
 
 const getBaseCookieOptions = () => ({
   httpOnly: true,
-  secure: isProduction,
+  secure: config.app.isProduction,
   sameSite: getSameSiteValue(),
 });
 

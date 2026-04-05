@@ -1,8 +1,5 @@
 const pino = require("pino");
-
-const ENVIRONMENT = process.env.NODE_ENV || (process.env.VERCEL === "1" ? "production" : "development");
-const LOG_LEVEL = process.env.LOG_LEVEL || (ENVIRONMENT === "production" ? "info" : "debug");
-const SERVICE_NAME = process.env.LOG_SERVICE_NAME || "alemam-task-manager-api";
+const config = require("../config");
 
 const compactObject = (value) =>
   Object.fromEntries(Object.entries(value).filter(([, currentValue]) => currentValue !== undefined));
@@ -24,10 +21,10 @@ const getRequestContext = (req) =>
   });
 
 const logger = pino({
-  level: LOG_LEVEL,
+  level: config.logging.level,
   base: {
-    service: SERVICE_NAME,
-    env: ENVIRONMENT,
+    service: config.logging.serviceName,
+    env: config.app.env,
   },
   timestamp: pino.stdTimeFunctions.isoTime,
   formatters: {

@@ -1,8 +1,8 @@
 const express = require("express");
-const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const connectDB = require("./config/mongo");
+const config = require("./src/config");
 const verifyOrigin = require("./src/core/middleware/verifyOrigin");
 const errorHandler = require("./src/core/middleware/errorHandler");
 const notFound = require("./src/core/middleware/notFound");
@@ -11,16 +11,13 @@ const { clientOrigins } = require("./src/utils/clientOrigins");
 const logger = require("./src/core/utils/logger");
 const { sendSuccess } = require("./src/core/utils/response");
 
-dotenv.config();
-
 const app = express();
 
-// Trust the first proxy hop so req.ip reflects the real client IP in production.
-app.set("trust proxy", 1);
+// Trust the configured proxy hops so req.ip reflects the real client IP.
+app.set("trust proxy", config.app.trustProxyHops);
 
 app.use(requestLogger);
 
-// Production Security Settings
 app.use(helmet({
   crossOriginResourcePolicy: false,
   contentSecurityPolicy: {
@@ -33,64 +30,68 @@ app.use(helmet({
   },
 }));
 
-// CORS for Production
 app.use(cors({
   origin: clientOrigins,
-  credentials: true
+  credentials: true,
 }));
 
 app.use(verifyOrigin);
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Production Database Connection
-connectDB().then(() => {
-  logger.info({ event: "bootstrap.database.connected" }, "MongoDB connected");
-}).catch(err => {
-  logger.error({ event: "bootstrap.database.connection_failed", err }, "MongoDB connection failed");
-});
+const databaseConnection = connectDB()
+  .then(() => {
+    logger.info({ event: "bootstrap.database.connected" }, "MongoDB connected");
+    return true;
+  })
+  .catch((err) => {
+    logger.fatal({ event: "bootstrap.database.connection_failed", err }, "MongoDB connection failed");
+    return false;
+  });
 
-// Routes
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/engineer", require("./routes/engineer"));
 app.use("/api/supervisor", require("./routes/supervisor"));
 
-// Production Root Route
-app.get("/", (req, res) => {
-  return sendSuccess(
+app.get("/", (_req, res) =>
+  sendSuccess(
     res,
     {
       version: "1.0.0",
-      environment: "production",
+      environment: config.app.env,
       status: "active",
     },
-    "Alemam Task Manager API - Production"
-  );
-});
+    "Alemam Task Manager API"
+  )
+);
 
-// Production Health Check
-app.get("/health", (req, res) => {
-  return sendSuccess(
+app.get("/health", (_req, res) =>
+  sendSuccess(
     res,
     {
       status: "ok",
-      environment: "production",
+      environment: config.app.env,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
     },
     "Health check successful"
-  );
-});
+  )
+);
 
 app.use(notFound);
 app.use(errorHandler);
 
-// Start server locally فقط
-if (process.env.VERCEL !== "1") {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    logger.info({ event: "bootstrap.server.started", port: Number(PORT) }, "Server started");
+if (config.app.shouldStartServer) {
+  databaseConnection.then((isConnected) => {
+    if (!isConnected) {
+      process.exit(1);
+      return;
+    }
+
+    app.listen(config.app.port, () => {
+      logger.info({ event: "bootstrap.server.started", port: config.app.port }, "Server started");
+    });
   });
 }
 

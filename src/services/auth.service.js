@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
+const config = require("../config");
 const AppError = require("../utils/AppError");
 const logger = require("../utils/logger");
 const { hasRole } = require("../policies/role.policy");
@@ -19,7 +20,7 @@ const ROLE_CONFIG = {
 };
 
 const generateToken = (payload) =>
-  jwt.sign(payload, process.env.JWT_SECRET, {
+  jwt.sign(payload, config.auth.jwtSecret, {
     expiresIn: "24h",
   });
 
@@ -32,12 +33,12 @@ const serializeUser = (user) => ({
 
 const serializeAdminUser = () => ({
   role: "admin",
-  email: process.env.ADMIN_EMAIL,
+  email: config.auth.adminEmail,
 });
 
 const loginAdmin = async ({ email, password }, requestContext = {}) => {
   try {
-    if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) {
+    if (email !== config.auth.adminEmail || password !== config.auth.adminPassword) {
       logger.logAuthAttempt({
         outcome: "failed",
         role: "admin",
