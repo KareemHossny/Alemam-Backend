@@ -3,7 +3,7 @@ const { sendSuccess } = require("../../core/utils/response");
 const userService = require("./user.service");
 
 exports.createUser = asyncHandler(async (req, res) => {
-  const result = await userService.createUser(req.validated.body);
+  const result = await userService.createUser(req.validated.body, req.user);
   return sendSuccess(res, { user: result.user }, result.message, 201);
 });
 
@@ -13,6 +13,6 @@ exports.getAllUsers = asyncHandler(async (_req, res) => {
 });
 
 exports.deleteUser = asyncHandler(async (req, res) => {
-  const result = await userService.deleteUser(req.validated.params.id);
+  const result = await userService.deleteUser(req.validated.params.id, req.user);
   return sendSuccess(res, null, result.message);
 });

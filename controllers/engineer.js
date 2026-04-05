@@ -3,6 +3,7 @@ const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
+const logger = require("../src/utils/logger");
 const { sendSuccess, sendError, extractResultPayload } = require("../src/utils/response");
 const AppError = require("../src/utils/AppError");
 const asyncHandler = require("../middlewares/asyncHandler");
@@ -26,7 +27,7 @@ const sendBulkResult = (res, result, successMessage) => {
 };
 
 exports.engineerLogin = asyncHandler(async (req, res) => {
-  const result = await authService.loginEngineer(req.validated.body);
+  const result = await authService.loginEngineer(req.validated.body, logger.getRequestContext(req));
   const { token, message, user } = result;
 
   res.cookie(ENGINEER_COOKIE_CONFIG.name, token, ENGINEER_COOKIE_CONFIG.setOptions);
@@ -38,6 +39,14 @@ exports.engineerLogout = asyncHandler(async (req, res) => {
   const result = authService.logout("Engineer logout successful");
 
   res.clearCookie(ENGINEER_COOKIE_CONFIG.name, ENGINEER_COOKIE_CONFIG.clearOptions);
+  req.log?.info(
+    logger.compactObject({
+      event: "auth.logout",
+      actorId: req.user?.id ? String(req.user.id) : undefined,
+      role: "engineer",
+    }),
+    "engineer logout"
+  );
 
   return sendSuccess(res, null, result.message);
 });

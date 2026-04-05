@@ -3,13 +3,14 @@ const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
+const logger = require("../src/utils/logger");
 const { sendSuccess, extractResultPayload } = require("../src/utils/response");
 const asyncHandler = require("../middlewares/asyncHandler");
 
 const ADMIN_COOKIE_CONFIG = getAuthCookieConfig("admin");
 
 exports.adminLogin = asyncHandler(async (req, res) => {
-  const result = await authService.loginAdmin(req.validated.body);
+  const result = await authService.loginAdmin(req.validated.body, logger.getRequestContext(req));
   const { token, message, user } = result;
 
   res.cookie(ADMIN_COOKIE_CONFIG.name, token, ADMIN_COOKIE_CONFIG.setOptions);
@@ -21,6 +22,7 @@ exports.adminLogout = asyncHandler(async (req, res) => {
   const result = authService.logout("Logout successful");
 
   res.clearCookie(ADMIN_COOKIE_CONFIG.name, ADMIN_COOKIE_CONFIG.clearOptions);
+  req.log?.info({ event: "auth.logout", role: "admin" }, "admin logout");
 
   return sendSuccess(res, null, result.message);
 });
@@ -31,7 +33,7 @@ exports.getCurrentAdminUser = asyncHandler(async (req, res) => {
 });
 
 exports.createProject = asyncHandler(async (req, res) => {
-  const result = await projectService.createProject(req.validated.body);
+  const result = await projectService.createProject(req.validated.body, req.user);
   const { data, message } = extractResultPayload(result, "Project created successfully");
   return sendSuccess(res, data, message, 201);
 });
@@ -48,13 +50,13 @@ exports.getProjectById = asyncHandler(async (req, res) => {
 });
 
 exports.updateProject = asyncHandler(async (req, res) => {
-  const result = await projectService.updateProject(req.validated.params.id, req.validated.body);
+  const result = await projectService.updateProject(req.validated.params.id, req.validated.body, req.user);
   const { data, message } = extractResultPayload(result, "Project updated successfully");
   return sendSuccess(res, data, message);
 });
 
 exports.deleteProject = asyncHandler(async (req, res) => {
-  const result = await projectService.deleteProject(req.validated.params.projectId);
+  const result = await projectService.deleteProject(req.validated.params.projectId, req.user);
   const { message, ...data } = result;
   return sendSuccess(res, data, message);
 });

@@ -3,6 +3,7 @@ const DailyTask = require("../../models/dailyTask");
 const MonthlyTask = require("../../models/monthlyTask");
 const User = require("../../models/User");
 const AppError = require("../utils/AppError");
+const logger = require("../utils/logger");
 const { canCreateTask, canDeleteTask, canReviewTask } = require("../policies/task.policy");
 const runInTransaction = require("../utils/runInTransaction");
 const { buildTaskFingerprint } = require("../utils/taskFingerprint");
@@ -344,7 +345,16 @@ const createTask = async (taskType, payload, user) => {
       return createdTask;
     });
 
-    console.log(`Engineer created ${taskType} task: ${task._id}`);
+    logger.logDataMutation({
+      action: "create",
+      entity: `${taskType}_task`,
+      entityId: task._id,
+      actor: user,
+      details: {
+        projectId: payload.projectId,
+        status: task.status,
+      },
+    });
 
     return task;
   } catch (error) {
@@ -442,7 +452,16 @@ const createTasksBulk = async (taskType, tasks, user) => {
     });
 
     if (!result.rolledBack) {
-      console.log(`Engineer created ${result.createdCount} ${taskType} tasks in bulk`);
+      logger.logDataMutation({
+        action: "bulk_create",
+        entity: `${taskType}_task`,
+        actor: user,
+        details: {
+          requestedCount: result.requestedCount,
+          createdCount: result.createdCount,
+          projectIds: [...new Set(tasks.map((task) => task.projectId))],
+        },
+      });
     }
 
     return result;
@@ -494,6 +513,15 @@ const deleteTask = async (taskType, taskId, user) => {
     }
 
     await config.model.findByIdAndDelete(taskId);
+    logger.logDataMutation({
+      action: "delete",
+      entity: `${taskType}_task`,
+      entityId: taskId,
+      actor: user,
+      details: {
+        projectId: task.project,
+      },
+    });
 
     return {
       message: config.deleteSuccessMessage,
@@ -555,7 +583,16 @@ const reviewTask = async (taskType, taskId, reviewData, user) => {
 
     await task.save();
 
-    console.log(`Supervisor ${user.id} reviewed ${taskType} task: ${taskId}`);
+    logger.logDataMutation({
+      action: "review",
+      entity: `${taskType}_task`,
+      entityId: taskId,
+      actor: user,
+      details: {
+        projectId: task.project,
+        status: reviewData.status,
+      },
+    });
 
     return {
       message: config.reviewSuccessMessage,

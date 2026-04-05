@@ -1,5 +1,6 @@
 const AppError = require("../src/utils/AppError");
 const { isAllowedClientOrigin } = require("../src/utils/clientOrigins");
+const logger = require("../src/utils/logger");
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -31,6 +32,15 @@ const verifyOrigin = (req, res, next) => {
   if (!requestOrigin || isAllowedClientOrigin(requestOrigin)) {
     return next();
   }
+
+  logger.logSecurityEvent({
+    event: "security.origin_blocked",
+    message: "Blocked state-changing request from disallowed origin",
+    request: logger.getRequestContext(req),
+    details: {
+      origin: requestOrigin,
+    },
+  });
 
   return next(new AppError("Origin not allowed", 403));
 };

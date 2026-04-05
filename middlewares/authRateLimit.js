@@ -1,5 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const AppError = require("../src/utils/AppError");
+const logger = require("../src/utils/logger");
 const { sendError } = require("../src/utils/response");
 
 const FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000;
@@ -20,6 +21,18 @@ const createAuthRateLimiter = ({ limit, routeLabel }) =>
     legacyHeaders: false,
     skipSuccessfulRequests: true,
     handler: (req, res, _next, options) => {
+      const retryAfterSeconds = getRetryAfterSeconds(req, options.windowMs);
+
+      logger.logSecurityEvent({
+        event: "security.auth_rate_limited",
+        message: `Too many ${routeLabel} login attempts`,
+        request: logger.getRequestContext(req),
+        details: {
+          routeLabel,
+          retryAfterSeconds,
+        },
+      });
+
       return sendError(
         res,
         new AppError(
@@ -28,7 +41,7 @@ const createAuthRateLimiter = ({ limit, routeLabel }) =>
           {
             code: "AUTH_RATE_LIMITED",
             details: {
-              retryAfterSeconds: getRetryAfterSeconds(req, options.windowMs),
+              retryAfterSeconds,
             },
           }
         )

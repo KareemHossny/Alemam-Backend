@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const AppError = require("../../core/errors/AppError");
+const logger = require("../../utils/logger");
 const { buildUserDeletionBlockers, getUserReferenceSummary } = require("../../utils/referenceIntegrity");
 const runInTransaction = require("../../utils/runInTransaction");
 const userRepository = require("./user.repository");
@@ -11,7 +12,7 @@ const serializeUser = (user) => ({
   role: user.role,
 });
 
-const createUser = async ({ name, email, password, role }) => {
+const createUser = async ({ name, email, password, role }, actor) => {
   try {
     const existingUser = await userRepository.findByEmail(email, { includeDeleted: true });
 
@@ -36,6 +37,16 @@ const createUser = async ({ name, email, password, role }) => {
     });
 
     await userRepository.save(user);
+    logger.logDataMutation({
+      action: "create",
+      entity: "user",
+      entityId: user._id,
+      actor,
+      details: {
+        targetRole: user.role,
+        targetEmail: user.email,
+      },
+    });
 
     return {
       message: "User created successfully",
@@ -54,8 +65,11 @@ const getAllUsers = async () => {
   }
 };
 
-const deleteUser = async (id) => {
+const deleteUser = async (id, actor) => {
   try {
+    let archivedUserId;
+    let archivedUserEmail;
+
     await runInTransaction(async (session) => {
       const user = await userRepository.findById(id, { session });
 
@@ -83,8 +97,20 @@ const deleteUser = async (id) => {
       user.isDeleted = true;
       user.deletedAt = new Date();
       user.assignedProjects = [];
+      archivedUserId = user._id;
+      archivedUserEmail = user.email;
 
       await userRepository.save(user, { session });
+    });
+
+    logger.logDataMutation({
+      action: "archive",
+      entity: "user",
+      entityId: archivedUserId,
+      actor,
+      details: {
+        targetEmail: archivedUserEmail,
+      },
     });
 
     return {

@@ -3,13 +3,14 @@ const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
+const logger = require("../src/utils/logger");
 const { sendSuccess, extractResultPayload } = require("../src/utils/response");
 const asyncHandler = require("../middlewares/asyncHandler");
 
 const SUPERVISOR_COOKIE_CONFIG = getAuthCookieConfig("supervisor");
 
 exports.supervisorLogin = asyncHandler(async (req, res) => {
-  const result = await authService.loginSupervisor(req.validated.body);
+  const result = await authService.loginSupervisor(req.validated.body, logger.getRequestContext(req));
   const { token, message, user } = result;
 
   res.cookie(SUPERVISOR_COOKIE_CONFIG.name, token, SUPERVISOR_COOKIE_CONFIG.setOptions);
@@ -21,6 +22,14 @@ exports.supervisorLogout = asyncHandler(async (req, res) => {
   const result = authService.logout("Supervisor logout successful");
 
   res.clearCookie(SUPERVISOR_COOKIE_CONFIG.name, SUPERVISOR_COOKIE_CONFIG.clearOptions);
+  req.log?.info(
+    logger.compactObject({
+      event: "auth.logout",
+      actorId: req.user?.id ? String(req.user.id) : undefined,
+      role: "supervisor",
+    }),
+    "supervisor logout"
+  );
 
   return sendSuccess(res, null, result.message);
 });

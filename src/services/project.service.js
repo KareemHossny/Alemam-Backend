@@ -2,6 +2,7 @@ const Project = require("../../models/Project");
 const DailyTask = require("../../models/dailyTask");
 const MonthlyTask = require("../../models/monthlyTask");
 const AppError = require("../utils/AppError");
+const logger = require("../utils/logger");
 const { normalizeIds, syncProjectAssignments } = require("../utils/referenceIntegrity");
 const runInTransaction = require("../utils/runInTransaction");
 
@@ -39,7 +40,7 @@ const getAssignedProjects = async ({ userId, assignmentField, populateUsers, err
   }
 };
 
-const createProject = async ({ name, scopeOfWork, engineers, supervisors }) => {
+const createProject = async ({ name, scopeOfWork, engineers, supervisors }, actor) => {
   try {
     const engineerIds = normalizeIds(engineers || []);
     const supervisorIds = normalizeIds(supervisors || []);
@@ -62,6 +63,17 @@ const createProject = async ({ name, scopeOfWork, engineers, supervisors }) => {
       });
 
       return await populateProjectQuery(Project.findById(project._id).session(session));
+    });
+
+    logger.logDataMutation({
+      action: "create",
+      entity: "project",
+      entityId: populatedProject?._id,
+      actor,
+      details: {
+        engineerCount: engineerIds.length,
+        supervisorCount: supervisorIds.length,
+      },
     });
 
     return buildProjectResponse("Project created successfully", populatedProject);
@@ -92,7 +104,7 @@ const getProjectById = async (projectId) => {
   }
 };
 
-const updateProject = async (projectId, updates) => {
+const updateProject = async (projectId, updates, actor) => {
   try {
     const populatedProject = await runInTransaction(async (session) => {
       const project = await Project.findById(projectId).session(session);
@@ -123,16 +135,26 @@ const updateProject = async (projectId, updates) => {
       return await populateProjectQuery(Project.findById(projectId).session(session));
     });
 
+    logger.logDataMutation({
+      action: "update",
+      entity: "project",
+      entityId: projectId,
+      actor,
+      details: {
+        updatedFields: Object.keys(updates || {}),
+        engineerCount: Array.isArray(populatedProject?.engineers) ? populatedProject.engineers.length : undefined,
+        supervisorCount: Array.isArray(populatedProject?.supervisors) ? populatedProject.supervisors.length : undefined,
+      },
+    });
+
     return buildProjectResponse("Project updated successfully", populatedProject);
   } catch (error) {
     AppError.rethrow(error, "Error updating project");
   }
 };
 
-const deleteProject = async (projectId) => {
+const deleteProject = async (projectId, actor) => {
   try {
-    console.log("Deleting project with ID:", projectId);
-
     const deletionSummary = await runInTransaction(async (session) => {
       const project = await Project.findById(projectId).session(session);
       if (!project) {
@@ -160,7 +182,17 @@ const deleteProject = async (projectId) => {
       };
     });
 
-    console.log(`Project "${deletionSummary.projectName}" deleted successfully`);
+    logger.logDataMutation({
+      action: "delete",
+      entity: "project",
+      entityId: projectId,
+      actor,
+      details: {
+        projectName: deletionSummary.projectName,
+        deletedDailyTasks: deletionSummary.deletedDailyTasks,
+        deletedMonthlyTasks: deletionSummary.deletedMonthlyTasks,
+      },
+    });
 
     return {
       message: "Project and all related tasks deleted successfully",

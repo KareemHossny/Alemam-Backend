@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
 const AppError = require("../utils/AppError");
+const logger = require("../utils/logger");
 const { hasRole } = require("../policies/role.policy");
 
 const ROLE_CONFIG = {
@@ -34,11 +35,26 @@ const serializeAdminUser = () => ({
   email: process.env.ADMIN_EMAIL,
 });
 
-const loginAdmin = async ({ email, password }) => {
+const loginAdmin = async ({ email, password }, requestContext = {}) => {
   try {
     if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) {
+      logger.logAuthAttempt({
+        outcome: "failed",
+        role: "admin",
+        email,
+        reason: "Invalid credentials",
+        request: requestContext,
+      });
+
       throw new AppError("Invalid credentials", 401);
     }
+
+    logger.logAuthAttempt({
+      outcome: "success",
+      role: "admin",
+      email,
+      request: requestContext,
+    });
 
     return {
       message: "Login successful",
@@ -50,25 +66,57 @@ const loginAdmin = async ({ email, password }) => {
   }
 };
 
-const loginRoleUser = async ({ email, password }, role) => {
+const loginRoleUser = async ({ email, password }, role, requestContext = {}) => {
   const config = ROLE_CONFIG[role];
 
   try {
     const user = await User.findOne({ email });
     if (!user) {
+      logger.logAuthAttempt({
+        outcome: "failed",
+        role,
+        email,
+        reason: "User not found",
+        request: requestContext,
+      });
+
       throw new AppError("Invalid email or password", 401);
     }
 
     if (!hasRole(user, role)) {
+      logger.logAuthAttempt({
+        outcome: "failed",
+        role,
+        email,
+        userId: user._id,
+        reason: config.forbiddenMessage,
+        request: requestContext,
+      });
+
       throw new AppError(config.forbiddenMessage, 403);
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      logger.logAuthAttempt({
+        outcome: "failed",
+        role,
+        email,
+        userId: user._id,
+        reason: "Invalid password",
+        request: requestContext,
+      });
+
       throw new AppError("Invalid email or password", 401);
     }
 
-    console.log(`${role} login successful: ${user.email}`);
+    logger.logAuthAttempt({
+      outcome: "success",
+      role,
+      email: user.email,
+      userId: user._id,
+      request: requestContext,
+    });
 
     return {
       message: config.successMessage,
@@ -116,8 +164,8 @@ const getCurrentRoleUser = async (authUser, role) => {
 
 module.exports = {
   loginAdmin,
-  loginEngineer: (payload) => loginRoleUser(payload, "engineer"),
-  loginSupervisor: (payload) => loginRoleUser(payload, "supervisor"),
+  loginEngineer: (payload, requestContext) => loginRoleUser(payload, "engineer", requestContext),
+  loginSupervisor: (payload, requestContext) => loginRoleUser(payload, "supervisor", requestContext),
   logout,
   getCurrentAdminUser,
   getCurrentEngineerUser: (authUser) => getCurrentRoleUser(authUser, "engineer"),

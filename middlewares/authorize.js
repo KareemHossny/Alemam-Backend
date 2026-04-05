@@ -1,4 +1,5 @@
 const AppError = require("../src/utils/AppError");
+const logger = require("../src/utils/logger");
 
 const normalizeRoles = (roles = []) => {
   if (roles.length === 1 && Array.isArray(roles[0])) {
@@ -19,6 +20,16 @@ const authorizeRoles = (...roleArgs) => {
     }
 
     if (!roles.includes(req.user.role)) {
+      logger.logSecurityEvent({
+        event: "security.access_denied",
+        message: "Role-based access denied",
+        actor: req.user,
+        request: logger.getRequestContext(req),
+        details: {
+          allowedRoles: roles,
+        },
+      });
+
       return next(new AppError("Access denied", 403, {
         code: "ACCESS_DENIED",
       }));

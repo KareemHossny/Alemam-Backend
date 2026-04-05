@@ -6,7 +6,9 @@ const connectDB = require("./config/mongo");
 const verifyOrigin = require("./src/core/middleware/verifyOrigin");
 const errorHandler = require("./src/core/middleware/errorHandler");
 const notFound = require("./src/core/middleware/notFound");
+const requestLogger = require("./src/core/middleware/requestLogger");
 const { clientOrigins } = require("./src/utils/clientOrigins");
+const logger = require("./src/core/utils/logger");
 const { sendSuccess } = require("./src/core/utils/response");
 
 dotenv.config();
@@ -15,6 +17,8 @@ const app = express();
 
 // Trust the first proxy hop so req.ip reflects the real client IP in production.
 app.set("trust proxy", 1);
+
+app.use(requestLogger);
 
 // Production Security Settings
 app.use(helmet({
@@ -42,9 +46,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Production Database Connection
 connectDB().then(() => {
-  console.log("✅ MongoDB Connected to Production");
+  logger.info({ event: "bootstrap.database.connected" }, "MongoDB connected");
 }).catch(err => {
-  console.error("❌ Production MongoDB connection failed:", err);
+  logger.error({ event: "bootstrap.database.connection_failed", err }, "MongoDB connection failed");
 });
 
 // Routes
@@ -86,7 +90,7 @@ app.use(errorHandler);
 if (process.env.VERCEL !== "1") {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
-    console.log(`🚀 Production Server running on port ${PORT}`);
+    logger.info({ event: "bootstrap.server.started", port: Number(PORT) }, "Server started");
   });
 }
 
