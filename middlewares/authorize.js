@@ -1,6 +1,16 @@
 const AppError = require("../src/utils/AppError");
 
-const authorize = (roles = []) => {
+const normalizeRoles = (roles = []) => {
+  if (roles.length === 1 && Array.isArray(roles[0])) {
+    return roles[0];
+  }
+
+  return roles;
+};
+
+const authorizeRoles = (...roleArgs) => {
+  const roles = normalizeRoles(roleArgs);
+
   return (req, res, next) => {
     if (!req.user) {
       return next(new AppError("Authentication required", 401, {
@@ -18,4 +28,6 @@ const authorize = (roles = []) => {
   };
 };
 
-module.exports = authorize;
+module.exports = authorizeRoles;
+module.exports.authorizeRoles = authorizeRoles;
+module.exports.authorize = authorizeRoles;

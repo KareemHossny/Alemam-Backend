@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const adminController = require("../controllers/admin");
 const auth = require("../src/core/middleware/auth");
-const authorize = require("../src/core/middleware/authorize");
+const { authorizeRoles } = require("../src/core/middleware/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../src/core/middleware/validate");
 const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
@@ -24,7 +24,7 @@ router.post("/logout", validate(logoutSchema), adminController.adminLogout);
 
 // Protected routes
 router.use(auth);
-router.use(authorize(["admin"]));
+router.use(authorizeRoles("admin"));
 
 // Users Management
 router.get("/me", validate(currentUserSchema), adminController.getCurrentAdminUser);

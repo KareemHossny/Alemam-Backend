@@ -3,6 +3,10 @@ const { isoDate, noInputSchema, objectId, optionalText, requiredText, strictObje
 const { inspectProjectAccess } = require("../utils/referenceIntegrity");
 const { buildTaskFingerprint } = require("../utils/taskFingerprint");
 const { getUserId } = require("../policies/role.policy");
+const {
+  getProjectAssignmentFieldForUser,
+  getProjectAccessDeniedMessage,
+} = require("../policies/project.policy");
 
 const BULK_TASK_LIMIT = 50;
 const DEFAULT_TASKS_PAGE = 1;
@@ -99,18 +103,11 @@ const buildTaskBodySchema = (dateSchema) =>
       note: note || description,
     }));
 
-const getAssignmentFieldForUser = (user) => (user?.role === "supervisor" ? "supervisors" : "engineers");
-
-const getProjectAccessMessage = (user) =>
-  user?.role === "supervisor"
-    ? "You are not assigned as a supervisor on this project"
-    : "You are not assigned to this project";
-
 const addProjectAccessIssues = async (tasks, req, ctx) => {
   const { missingProjectIds, inaccessibleProjectIds } = await inspectProjectAccess({
     projectIds: tasks.map((task) => task.projectId),
     user: req.user,
-    assignmentField: getAssignmentFieldForUser(req.user),
+    assignmentField: getProjectAssignmentFieldForUser(req.user),
   });
 
   const missingProjectIdSet = new Set(missingProjectIds);
@@ -132,7 +129,7 @@ const addProjectAccessIssues = async (tasks, req, ctx) => {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: [...issuePathPrefix, "projectId"],
-        message: getProjectAccessMessage(req.user),
+        message: getProjectAccessDeniedMessage(req.user),
       });
     }
   });

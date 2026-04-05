@@ -371,6 +371,9 @@ const getEngineerDashboardStats = async (user) => {
     const projects = await Project.find({ engineers: user.id }).select("_id").lean();
     const projectIds = projects.map((project) => project._id);
     const totals = await aggregateTaskTotals({
+      filters: {
+        userId: user.id,
+      },
       aggregateOptions: {
         projectIds,
       },

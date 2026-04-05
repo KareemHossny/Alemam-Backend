@@ -2,9 +2,10 @@ const express = require("express");
 const router = express.Router();
 const supervisorController = require("../controllers/supervisor");
 const auth = require("../middlewares/auth");
-const authorize = require("../middlewares/authorize");
+const { authorizeRoles } = require("../middlewares/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../middlewares/validate");
+const { authorizeProjectAccess, authorizeTaskAction } = require("../src/core/middleware/ownership");
 const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
 const { listProjectsSchema } = require("../src/validators/project.validator");
 const { dashboardStatsSchema, supervisorProjectStatsSchema } = require("../src/validators/stats.validator");
@@ -16,7 +17,7 @@ router.post("/logout", validate(logoutSchema), supervisorController.supervisorLo
 
 // Protected routes 
 router.use(auth);
-router.use(authorize(["supervisor"]));
+router.use(authorizeRoles("supervisor"));
 
 // Projects
 router.get("/me", validate(currentUserSchema), supervisorController.getCurrentSupervisorUser);
@@ -25,11 +26,31 @@ router.get("/dashboard/stats", validate(dashboardStatsSchema), supervisorControl
 router.get("/projects/stats", validate(supervisorProjectStatsSchema), supervisorController.getProjectStats);
 
 // Daily Tasks Review
-router.get("/daily-tasks/:projectId", validate(getDailyTasksByProjectSchema), supervisorController.getDailyTasks);
-router.put("/daily-tasks/:taskId/review", validate(reviewTaskSchema), supervisorController.reviewDailyTask);
+router.get(
+  "/daily-tasks/:projectId",
+  validate(getDailyTasksByProjectSchema),
+  authorizeProjectAccess({ source: "params" }),
+  supervisorController.getDailyTasks
+);
+router.put(
+  "/daily-tasks/:taskId/review",
+  validate(reviewTaskSchema),
+  authorizeTaskAction({ taskType: "daily", action: "review" }),
+  supervisorController.reviewDailyTask
+);
 
 // Monthly Tasks Review
-router.get("/monthly-tasks/:projectId", validate(getTasksByProjectSchema), supervisorController.getMonthlyTasks);
-router.put("/monthly-tasks/:taskId/review", validate(reviewTaskSchema), supervisorController.reviewMonthlyTask);
+router.get(
+  "/monthly-tasks/:projectId",
+  validate(getTasksByProjectSchema),
+  authorizeProjectAccess({ source: "params" }),
+  supervisorController.getMonthlyTasks
+);
+router.put(
+  "/monthly-tasks/:taskId/review",
+  validate(reviewTaskSchema),
+  authorizeTaskAction({ taskType: "monthly", action: "review" }),
+  supervisorController.reviewMonthlyTask
+);
 
 module.exports = router;

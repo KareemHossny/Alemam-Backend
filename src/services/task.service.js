@@ -467,6 +467,7 @@ const getProjectTasksForEngineer = async (taskType, projectId, user, filters = {
       filters: {
         ...filters,
         projectId,
+        userId: user.id,
       },
       populate: [
         { path: "project", select: "name scopeOfWork" },
