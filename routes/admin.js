@@ -6,6 +6,7 @@ const authorize = require("../middlewares/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../middlewares/validate");
 const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
+const { adminTaskStatsSchema, adminProjectStatsSchema } = require("../src/validators/stats.validator");
 const {
   createProjectSchema,
   projectByIdSchema,
@@ -33,12 +34,14 @@ router.delete("/users/:id", validate(deleteUserSchema), adminController.deleteUs
 
 // Projects Management
 router.get("/projects", validate(listProjectsSchema), adminController.getAllProjects);
+router.get("/projects/:projectId/stats", validate(adminProjectStatsSchema), adminController.getProjectStats);
 router.get("/projects/:id", validate(projectByIdSchema), adminController.getProjectById);
 router.post("/projects", validate(createProjectSchema), adminController.createProject);
 router.put("/projects/:id", validate(updateProjectSchema), adminController.updateProject);
 router.delete("/projects/:projectId", validate(deleteProjectSchema), adminController.deleteProject);
 
 // Tasks Management - الجديد
+router.get("/tasks/stats", validate(adminTaskStatsSchema), adminController.getTaskStats);
 router.get("/tasks/daily", validate(listTasksSchema), adminController.getAllDailyTasks);
 router.get("/tasks/monthly", validate(listTasksSchema), adminController.getAllMonthlyTasks);
 router.get("/tasks/project/:projectId", validate(getProjectTasksSchema), adminController.getProjectTasks);

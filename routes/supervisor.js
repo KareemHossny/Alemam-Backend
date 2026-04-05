@@ -7,6 +7,7 @@ const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../middlewares/validate");
 const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
 const { listProjectsSchema } = require("../src/validators/project.validator");
+const { dashboardStatsSchema, supervisorProjectStatsSchema } = require("../src/validators/stats.validator");
 const { getDailyTasksByProjectSchema, getTasksByProjectSchema, reviewTaskSchema } = require("../src/validators/task.validator");
 
 // Public routes 
@@ -20,6 +21,8 @@ router.use(authorize(["supervisor"]));
 // Projects
 router.get("/me", validate(currentUserSchema), supervisorController.getCurrentSupervisorUser);
 router.get("/projects", validate(listProjectsSchema), supervisorController.getSupervisorProjects);
+router.get("/dashboard/stats", validate(dashboardStatsSchema), supervisorController.getDashboardStats);
+router.get("/projects/stats", validate(supervisorProjectStatsSchema), supervisorController.getProjectStats);
 
 // Daily Tasks Review
 router.get("/daily-tasks/:projectId", validate(getDailyTasksByProjectSchema), supervisorController.getDailyTasks);

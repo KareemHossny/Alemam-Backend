@@ -6,8 +6,10 @@ const AppError = require("../utils/AppError");
 const { canCreateTask, canDeleteTask, canReviewTask } = require("../policies/task.policy");
 const runInTransaction = require("../utils/runInTransaction");
 const { buildTaskFingerprint } = require("../utils/taskFingerprint");
-
-const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
+const {
+  normalizeUtcDateOnly,
+  buildTaskQuery,
+} = require("../utils/taskQuery");
 
 const TASK_CONFIG = {
   daily: {
@@ -39,76 +41,6 @@ const TASK_CONFIG = {
 const getTaskConfig = (taskType) => TASK_CONFIG[taskType];
 
 const getBulkCreateErrorMessage = (taskType) => `Error creating ${taskType} tasks`;
-
-const normalizeUtcDateOnly = (dateString) => {
-  const match = DATE_ONLY_REGEX.exec(dateString || "");
-
-  if (!match) {
-    throw new AppError("Invalid date", 400);
-  }
-
-  const [, year, month, day] = match;
-
-  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
-};
-
-const buildDayRangeFilter = (dateString) => {
-  const start = normalizeUtcDateOnly(dateString);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-
-  return {
-    $gte: start,
-    $lt: end,
-  };
-};
-
-const getExclusiveEndDate = (dateString) => {
-  const endDate = normalizeUtcDateOnly(dateString);
-  endDate.setUTCDate(endDate.getUTCDate() + 1);
-  return endDate;
-};
-
-const buildTaskDateFilter = (filters = {}) => {
-  if (filters.date) {
-    return buildDayRangeFilter(filters.date);
-  }
-
-  const rangeFilter = {};
-
-  if (filters.dateFrom) {
-    rangeFilter.$gte = normalizeUtcDateOnly(filters.dateFrom);
-  }
-
-  if (filters.dateTo) {
-    rangeFilter.$lt = getExclusiveEndDate(filters.dateTo);
-  }
-
-  return Object.keys(rangeFilter).length > 0 ? rangeFilter : undefined;
-};
-
-const buildTaskQuery = (filters = {}) => {
-  const query = {};
-
-  if (filters.projectId) {
-    query.project = filters.projectId;
-  }
-
-  if (filters.status) {
-    query.status = filters.status;
-  }
-
-  if (filters.userId) {
-    query.createdBy = filters.userId;
-  }
-
-  const dateFilter = buildTaskDateFilter(filters);
-  if (dateFilter) {
-    query.date = dateFilter;
-  }
-
-  return query;
-};
 
 const normalizePagination = (filters = {}) => {
   const page = Number(filters.page) || 1;

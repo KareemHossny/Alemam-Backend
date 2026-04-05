@@ -2,6 +2,7 @@ const authService = require("../src/services/auth.service");
 const userService = require("../src/services/user.service");
 const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
+const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
 
 const ADMIN_COOKIE_CONFIG = getAuthCookieConfig("admin");
@@ -77,5 +78,18 @@ exports.getAllMonthlyTasks = async (req, res) => {
 
 exports.getProjectTasks = async (req, res) => {
   const result = await taskService.getAdminProjectTasks(req.validated.params.projectId);
+  return res.json(result);
+};
+
+exports.getTaskStats = async (req, res) => {
+  const result = await statsService.getAdminTaskStats(req.validated.query);
+  return res.json(result);
+};
+
+exports.getProjectStats = async (req, res) => {
+  const result = await statsService.getAdminProjectStats(
+    req.validated.params.projectId,
+    req.validated.query
+  );
   return res.json(result);
 };

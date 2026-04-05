@@ -1,6 +1,7 @@
 const authService = require("../src/services/auth.service");
 const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
+const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
 
 const ENGINEER_COOKIE_CONFIG = getAuthCookieConfig("engineer");
@@ -66,5 +67,10 @@ exports.getMonthlyTasks = async (req, res) => {
 
 exports.deleteMonthlyTask = async (req, res) => {
   const result = await taskService.deleteMonthlyTask(req.validated.params.taskId, req.user);
+  return res.json(result);
+};
+
+exports.getDashboardStats = async (req, res) => {
+  const result = await statsService.getEngineerDashboardStats(req.user);
   return res.json(result);
 };
