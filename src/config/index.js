@@ -81,6 +81,7 @@ if (!parsedEnv.success) {
 const env = parsedEnv.data;
 const isVercel = env.VERCEL === "1";
 const isProduction = env.NODE_ENV === "production" || isVercel;
+const cookieSameSite = isProduction ? "none" : (env.AUTH_COOKIE_SAME_SITE || "lax");
 
 const configuredOrigins = (env.CLIENT_ORIGINS || env.CLIENT_ORIGIN || "")
   .split(",")
@@ -107,7 +108,7 @@ const config = Object.freeze({
     jwtSecret: env.JWT_SECRET,
     adminEmail: env.ADMIN_EMAIL,
     adminPassword: env.ADMIN_PASSWORD,
-    cookieSameSite: env.AUTH_COOKIE_SAME_SITE || (isProduction ? "none" : "lax"),
+    cookieSameSite,
   }),
   cors: Object.freeze({
     clientOrigins: configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_CLIENT_ORIGINS,

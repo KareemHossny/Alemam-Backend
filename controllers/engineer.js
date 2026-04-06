@@ -53,7 +53,7 @@ exports.engineerLogout = asyncHandler(async (req, res) => {
 
 exports.getCurrentEngineerUser = asyncHandler(async (req, res) => {
   const result = await authService.getCurrentEngineerUser(req.user);
-  return sendSuccess(res, { user: result.user }, result.message);
+  return sendSuccess(res, result.user, result.message);
 });
 
 exports.getEngineerProjects = asyncHandler(async (req, res) => {

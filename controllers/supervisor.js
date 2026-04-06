@@ -36,7 +36,7 @@ exports.supervisorLogout = asyncHandler(async (req, res) => {
 
 exports.getCurrentSupervisorUser = asyncHandler(async (req, res) => {
   const result = await authService.getCurrentSupervisorUser(req.user);
-  return sendSuccess(res, { user: result.user }, result.message);
+  return sendSuccess(res, result.user, result.message);
 });
 
 exports.getSupervisorProjects = asyncHandler(async (req, res) => {

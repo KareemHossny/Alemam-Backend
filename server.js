@@ -21,6 +21,11 @@ const parseOriginList = (value = "") =>
 
 const csrfAllowedOrigins = parseOriginList(process.env.CSRF_ALLOWED_ORIGINS);
 const csrfOriginAllowlist = csrfAllowedOrigins.length > 0 ? csrfAllowedOrigins : clientOrigins;
+const corsOptions = {
+  origin: clientOrigins,
+  credentials: true,
+  optionsSuccessStatus: 204,
+};
 
 // Trust the configured proxy hops so req.ip reflects the real client IP.
 app.set("trust proxy", config.app.trustProxyHops);
@@ -39,10 +44,8 @@ app.use(helmet({
   },
 }));
 
-app.use(cors({
-  origin: clientOrigins,
-  credentials: true,
-}));
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.use(verifyOrigin({
   allowedOrigins: csrfOriginAllowlist,

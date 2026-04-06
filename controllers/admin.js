@@ -4,18 +4,83 @@ const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
 const logger = require("../src/utils/logger");
-const { sendSuccess, extractResultPayload } = require("../src/utils/response");
+const AppError = require("../src/utils/AppError");
+const { sendSuccess, sendError, extractResultPayload } = require("../src/utils/response");
 const asyncHandler = require("../middlewares/asyncHandler");
 
 const ADMIN_COOKIE_CONFIG = getAuthCookieConfig("admin");
 
 exports.adminLogin = asyncHandler(async (req, res) => {
-  const result = await authService.loginAdmin(req.validated.body, logger.getRequestContext(req));
-  const { token, message, user } = result;
+  const requestContext = logger.getRequestContext(req);
 
-  res.cookie(ADMIN_COOKIE_CONFIG.name, token, ADMIN_COOKIE_CONFIG.setOptions);
+  try {
+    req.log?.debug(
+      logger.compactObject({
+        event: "auth.login.admin.start",
+        role: "admin",
+        email: req.validated.body?.email,
+        ...requestContext,
+      }),
+      "admin login request received"
+    );
 
-  return sendSuccess(res, { user }, message);
+    const result = await authService.loginAdmin(req.validated.body, requestContext);
+    const { token, message, user } = result;
+
+    req.log?.debug(
+      logger.compactObject({
+        event: "auth.login.admin.token_issued",
+        role: "admin",
+        hasToken: Boolean(token),
+        cookieName: ADMIN_COOKIE_CONFIG.name,
+        cookiePath: ADMIN_COOKIE_CONFIG.setOptions.path,
+        sameSite: ADMIN_COOKIE_CONFIG.setOptions.sameSite,
+        secure: ADMIN_COOKIE_CONFIG.setOptions.secure,
+        ...requestContext,
+      }),
+      "admin login token generated"
+    );
+
+    res.cookie(ADMIN_COOKIE_CONFIG.name, token, ADMIN_COOKIE_CONFIG.setOptions);
+
+    req.log?.info(
+      logger.compactObject({
+        event: "auth.login.admin.success",
+        role: "admin",
+        email: user?.email,
+        cookieName: ADMIN_COOKIE_CONFIG.name,
+        ...requestContext,
+      }),
+      "admin login response sent"
+    );
+
+    return sendSuccess(res, { user }, message);
+  } catch (error) {
+    req.log?.error(
+      logger.compactObject({
+        event: "auth.login.admin.failure",
+        role: "admin",
+        email: req.validated.body?.email,
+        errorName: error?.name,
+        errorMessage: error?.message,
+        errorCode: error?.code,
+        statusCode: error?.statusCode,
+        ...requestContext,
+      }),
+      "admin login failed"
+    );
+
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    return sendError(
+      res,
+      new AppError("Login failed", 500, {
+        code: "LOGIN_ERROR",
+      })
+    );
+  }
 });
 
 exports.adminLogout = asyncHandler(async (req, res) => {
@@ -29,7 +94,7 @@ exports.adminLogout = asyncHandler(async (req, res) => {
 
 exports.getCurrentAdminUser = asyncHandler(async (req, res) => {
   const result = await authService.getCurrentAdminUser();
-  return sendSuccess(res, { user: result.user }, result.message);
+  return sendSuccess(res, result.user, result.message);
 });
 
 exports.createProject = asyncHandler(async (req, res) => {
