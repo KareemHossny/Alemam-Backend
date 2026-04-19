@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { noInputSchema, objectId, requiredText, strictObject } = require("../../validators/common");
+const { USER_ROLES } = require("../../../models/User");
 
 const createUserSchema = {
   body: strictObject({
@@ -16,9 +17,9 @@ const createUserSchema = {
         required_error: "password is required",
         invalid_type_error: "password must be a string",
       })
-      .min(6, "Password must be at least 6 characters"),
-    role: z.enum(["engineer", "supervisor"], {
-      errorMap: () => ({ message: "role must be either engineer or supervisor" }),
+      .min(8, "Password must be at least 8 characters"),
+    role: z.enum(USER_ROLES, {
+      errorMap: () => ({ message: "role must be one of admin, engineer, or supervisor" }),
     }),
   }),
   params: noInputSchema,

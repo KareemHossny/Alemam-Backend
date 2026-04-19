@@ -39,10 +39,10 @@ const envSchema = z.object({
   VERCEL: z.string().optional(),
   PORT: integerFromEnv("PORT", 5000),
   TRUST_PROXY_HOPS: integerFromEnv("TRUST_PROXY_HOPS", 1),
+  BCRYPT_SALT_ROUNDS: integerFromEnv("BCRYPT_SALT_ROUNDS", 12),
   MONGO_URI: z.string().trim().min(1, "MONGO_URI is required"),
   JWT_SECRET: z.string().trim().min(16, "JWT_SECRET must be at least 16 characters"),
-  ADMIN_EMAIL: z.string().trim().email("ADMIN_EMAIL must be a valid email"),
-  ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters"),
+  JWT_EXPIRES_IN: z.string().trim().min(2, "JWT_EXPIRES_IN is required").default("24h"),
   CLIENT_ORIGINS: z.string().optional(),
   CLIENT_ORIGIN: z.string().optional(),
   AUTH_COOKIE_SAME_SITE: z
@@ -106,8 +106,8 @@ const config = Object.freeze({
   }),
   auth: Object.freeze({
     jwtSecret: env.JWT_SECRET,
-    adminEmail: env.ADMIN_EMAIL,
-    adminPassword: env.ADMIN_PASSWORD,
+    jwtExpiresIn: env.JWT_EXPIRES_IN,
+    bcryptSaltRounds: env.BCRYPT_SALT_ROUNDS,
     cookieSameSite,
   }),
   cors: Object.freeze({

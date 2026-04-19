@@ -1,4 +1,3 @@
-const bcrypt = require("bcryptjs");
 const AppError = require("../../core/errors/AppError");
 const logger = require("../../utils/logger");
 const { buildUserDeletionBlockers, getUserReferenceSummary } = require("../../utils/referenceIntegrity");
@@ -11,6 +10,16 @@ const serializeUser = (user) => ({
   email: user.email,
   role: user.role,
 });
+
+const ensureAdminBootstrapAvailable = async () => {
+  const adminCount = await userRepository.countActiveUsersByRole("admin");
+
+  if (adminCount > 0) {
+    throw new AppError("Admin bootstrap is no longer available", 409, {
+      code: "ADMIN_BOOTSTRAP_DISABLED",
+    });
+  }
+};
 
 const createUser = async ({ name, email, password, role }, actor) => {
   try {
@@ -28,11 +37,10 @@ const createUser = async ({ name, email, password, role }, actor) => {
       throw new AppError("User already exists", 400, { code: "USER_ALREADY_EXISTS" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
     const user = userRepository.buildUser({
       name,
       email,
-      password: hashedPassword,
+      password,
       role,
     });
 
@@ -59,9 +67,19 @@ const createUser = async ({ name, email, password, role }, actor) => {
 
 const getAllUsers = async () => {
   try {
-    return await userRepository.listActiveUsers();
+    const users = await userRepository.listActiveUsers();
+    return Array.isArray(users) ? users : [];
   } catch (error) {
     AppError.rethrow(error, "Error fetching users");
+  }
+};
+
+const bootstrapAdmin = async ({ name, email, password }) => {
+  try {
+    await ensureAdminBootstrapAvailable();
+    return createUser({ name, email, password, role: "admin" }, null);
+  } catch (error) {
+    AppError.rethrow(error, "Error creating initial admin");
   }
 };
 
@@ -75,6 +93,22 @@ const deleteUser = async (id, actor) => {
 
       if (!user) {
         throw new AppError("User not found", 404, { code: "USER_NOT_FOUND" });
+      }
+
+      if (user.role === "admin" && String(actor?.id || actor?._id || "") === String(user._id)) {
+        throw new AppError("You cannot delete your own admin account", 409, {
+          code: "ADMIN_SELF_DELETE_BLOCKED",
+        });
+      }
+
+      if (user.role === "admin") {
+        const activeAdminCount = await userRepository.countActiveUsersByRole("admin", { session });
+
+        if (activeAdminCount <= 1) {
+          throw new AppError("Cannot delete the last active admin account", 409, {
+            code: "LAST_ADMIN_DELETE_BLOCKED",
+          });
+        }
       }
 
       const referenceSummary = await getUserReferenceSummary(id, { session });
@@ -122,6 +156,7 @@ const deleteUser = async (id, actor) => {
 };
 
 module.exports = {
+  bootstrapAdmin,
   createUser,
   getAllUsers,
   deleteUser,

@@ -2,8 +2,10 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const connectDB = require("./config/mongo");
+const { getConnectionState } = require("./config/mongo");
 const config = require("./src/config");
 const verifyOrigin = require("./src/core/middleware/verifyOrigin");
+const ensureDatabaseConnection = require("./src/core/middleware/ensureDatabaseConnection");
 const errorHandler = require("./src/core/middleware/errorHandler");
 const notFound = require("./src/core/middleware/notFound");
 const requestLogger = require("./src/core/middleware/requestLogger");
@@ -26,6 +28,12 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 204,
 };
+const DATABASE_CONNECTION_STATE = Object.freeze({
+  0: "disconnected",
+  1: "connected",
+  2: "connecting",
+  3: "disconnecting",
+});
 
 // Trust the configured proxy hops so req.ip reflects the real client IP.
 app.set("trust proxy", config.app.trustProxyHops);
@@ -64,6 +72,8 @@ const databaseConnection = connectDB()
     return false;
   });
 
+app.use(ensureDatabaseConnection);
+
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/engineer", require("./routes/engineer"));
 app.use("/api/supervisor", require("./routes/supervisor"));
@@ -86,6 +96,7 @@ app.get("/health", (_req, res) =>
     {
       status: "ok",
       environment: config.app.env,
+      database: DATABASE_CONNECTION_STATE[getConnectionState()] || "unknown",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
     },

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const AppError = require("./AppError");
+const { connectDB } = require("../../config/mongo");
 
 const DEFAULT_TRANSACTION_OPTIONS = {
   readConcern: { level: "snapshot" },
@@ -7,6 +8,7 @@ const DEFAULT_TRANSACTION_OPTIONS = {
 };
 
 const runInTransaction = async (work, options = {}) => {
+  await connectDB();
   const session = await mongoose.startSession();
 
   try {

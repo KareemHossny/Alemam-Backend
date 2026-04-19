@@ -50,6 +50,10 @@ const createAuthRateLimiter = ({ limit, routeLabel }) =>
   });
 
 const authRateLimiters = Object.freeze({
+  adminBootstrap: createAuthRateLimiter({
+    limit: 3,
+    routeLabel: "admin bootstrap",
+  }),
   adminLogin: createAuthRateLimiter({
     limit: 5,
     routeLabel: "admin",

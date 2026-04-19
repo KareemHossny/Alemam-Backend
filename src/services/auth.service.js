@@ -1,12 +1,16 @@
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const User = require("../../models/User");
 const config = require("../config");
 const AppError = require("../utils/AppError");
 const logger = require("../utils/logger");
 const { hasRole } = require("../policies/role.policy");
+const userRepository = require("../modules/user/user.repository");
 
 const ROLE_CONFIG = {
+  admin: {
+    successMessage: "Admin login successful",
+    forbiddenMessage: "Access denied. Admin account required.",
+    internalErrorMessage: "Internal server error",
+  },
   engineer: {
     successMessage: "Engineer login successful",
     forbiddenMessage: "Access denied. Engineer account required.",
@@ -21,7 +25,8 @@ const ROLE_CONFIG = {
 
 const generateToken = (payload) =>
   jwt.sign(payload, config.auth.jwtSecret, {
-    expiresIn: "24h",
+    algorithm: "HS256",
+    expiresIn: config.auth.jwtExpiresIn,
   });
 
 const serializeUser = (user) => ({
@@ -31,52 +36,18 @@ const serializeUser = (user) => ({
   role: user.role,
 });
 
-const serializeAdminUser = () => ({
-  role: "admin",
-  email: config.auth.adminEmail,
-});
-
-const loginAdmin = async ({ email, password }, requestContext = {}) => {
-  try {
-    if (email !== config.auth.adminEmail || password !== config.auth.adminPassword) {
-      logger.logAuthAttempt({
-        outcome: "failed",
-        role: "admin",
-        email,
-        reason: "Invalid credentials",
-        request: requestContext,
-      });
-
-      throw new AppError("Invalid credentials", 401);
-    }
-
-    logger.logAuthAttempt({
-      outcome: "success",
-      role: "admin",
-      email,
-      request: requestContext,
-    });
-
-    return {
-      message: "Login successful",
-      token: generateToken({ role: "admin" }),
-      user: serializeAdminUser(),
-    };
-  } catch (error) {
-    AppError.rethrow(error, "Server error");
-  }
-};
-
 const loginRoleUser = async ({ email, password }, role, requestContext = {}) => {
-  const config = ROLE_CONFIG[role];
+  const roleConfig = ROLE_CONFIG[role];
+  const normalizedEmail = String(email || "").trim().toLowerCase();
 
   try {
-    const user = await User.findOne({ email });
+    const user = await userRepository.findByEmailForAuth(normalizedEmail);
+
     if (!user) {
       logger.logAuthAttempt({
         outcome: "failed",
         role,
-        email,
+        email: normalizedEmail,
         reason: "User not found",
         request: requestContext,
       });
@@ -88,21 +59,22 @@ const loginRoleUser = async ({ email, password }, role, requestContext = {}) => 
       logger.logAuthAttempt({
         outcome: "failed",
         role,
-        email,
+        email: normalizedEmail,
         userId: user._id,
-        reason: config.forbiddenMessage,
+        reason: roleConfig.forbiddenMessage,
         request: requestContext,
       });
 
-      throw new AppError(config.forbiddenMessage, 403);
+      throw new AppError(roleConfig.forbiddenMessage, 403);
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
+
     if (!isMatch) {
       logger.logAuthAttempt({
         outcome: "failed",
         role,
-        email,
+        email: normalizedEmail,
         userId: user._id,
         reason: "Invalid password",
         request: requestContext,
@@ -120,7 +92,7 @@ const loginRoleUser = async ({ email, password }, role, requestContext = {}) => 
     });
 
     return {
-      message: config.successMessage,
+      message: roleConfig.successMessage,
       token: generateToken({
         id: user._id,
         role: user.role,
@@ -130,28 +102,26 @@ const loginRoleUser = async ({ email, password }, role, requestContext = {}) => 
       user: serializeUser(user),
     };
   } catch (error) {
-    AppError.rethrow(error, config.internalErrorMessage);
+    AppError.rethrow(error, roleConfig.internalErrorMessage);
   }
 };
 
 const logout = (message) => ({ message });
 
-const getCurrentAdminUser = async () => ({
-  message: "Session active",
-  user: serializeAdminUser(),
-});
-
 const getCurrentRoleUser = async (authUser, role) => {
-  const config = ROLE_CONFIG[role];
+  const roleConfig = ROLE_CONFIG[role];
 
   try {
-    const user = await User.findById(authUser.id).select("_id name email role");
+    const user = await userRepository.findById(authUser.id, {
+      select: "_id name email role",
+    });
+
     if (!user) {
       throw new AppError("Session expired. Please log in again.", 401);
     }
 
     if (!hasRole(user, role)) {
-      throw new AppError(config.forbiddenMessage, 403);
+      throw new AppError(roleConfig.forbiddenMessage, 403);
     }
 
     return {
@@ -159,16 +129,16 @@ const getCurrentRoleUser = async (authUser, role) => {
       user: serializeUser(user),
     };
   } catch (error) {
-    AppError.rethrow(error, config.internalErrorMessage);
+    AppError.rethrow(error, roleConfig.internalErrorMessage);
   }
 };
 
 module.exports = {
-  loginAdmin,
+  loginAdmin: (payload, requestContext) => loginRoleUser(payload, "admin", requestContext),
   loginEngineer: (payload, requestContext) => loginRoleUser(payload, "engineer", requestContext),
   loginSupervisor: (payload, requestContext) => loginRoleUser(payload, "supervisor", requestContext),
   logout,
-  getCurrentAdminUser,
+  getCurrentAdminUser: (authUser) => getCurrentRoleUser(authUser, "admin"),
   getCurrentEngineerUser: (authUser) => getCurrentRoleUser(authUser, "engineer"),
   getCurrentSupervisorUser: (authUser) => getCurrentRoleUser(authUser, "supervisor"),
 };

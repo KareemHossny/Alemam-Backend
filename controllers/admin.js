@@ -2,6 +2,7 @@ const authService = require("../src/services/auth.service");
 const projectService = require("../src/services/project.service");
 const taskService = require("../src/services/task.service");
 const statsService = require("../src/services/stats.service");
+const userService = require("../src/modules/user/user.service");
 const { getAuthCookieConfig } = require("../src/utils/authCookie");
 const logger = require("../src/utils/logger");
 const AppError = require("../src/utils/AppError");
@@ -9,6 +10,11 @@ const { sendSuccess, sendError, extractResultPayload } = require("../src/utils/r
 const asyncHandler = require("../middlewares/asyncHandler");
 
 const ADMIN_COOKIE_CONFIG = getAuthCookieConfig("admin");
+
+exports.bootstrapAdmin = asyncHandler(async (req, res) => {
+  const result = await userService.bootstrapAdmin(req.validated.body);
+  return sendSuccess(res, { user: result.user }, result.message, 201);
+});
 
 exports.adminLogin = asyncHandler(async (req, res) => {
   const requestContext = logger.getRequestContext(req);
@@ -93,7 +99,7 @@ exports.adminLogout = asyncHandler(async (req, res) => {
 });
 
 exports.getCurrentAdminUser = asyncHandler(async (req, res) => {
-  const result = await authService.getCurrentAdminUser();
+  const result = await authService.getCurrentAdminUser(req.user);
   return sendSuccess(res, result.user, result.message);
 });
 

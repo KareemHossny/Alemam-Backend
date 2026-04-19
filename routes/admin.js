@@ -5,7 +5,7 @@ const auth = require("../src/core/middleware/auth");
 const { authorizeRoles } = require("../src/core/middleware/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../src/core/middleware/validate");
-const { loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
+const { bootstrapAdminSchema, loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
 const { adminTaskStatsSchema, adminProjectStatsSchema } = require("../src/validators/stats.validator");
 const userRoutes = require("../src/modules/user/user.routes");
 const {
@@ -19,6 +19,7 @@ const {
 const { listTasksSchema } = require("../src/validators/task.validator");
 
 // Public routes
+router.post("/bootstrap", authRateLimiters.adminBootstrap, validate(bootstrapAdminSchema), adminController.bootstrapAdmin);
 router.post("/login", authRateLimiters.adminLogin, validate(loginSchema), adminController.adminLogin);
 router.post("/logout", validate(logoutSchema), adminController.adminLogout);
 

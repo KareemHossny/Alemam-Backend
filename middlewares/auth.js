@@ -24,12 +24,9 @@ const auth = async (req, res, next) => {
       }));
     }
 
-    const decoded = jwt.verify(token, config.auth.jwtSecret);
-
-    if (decoded.role === "admin") {
-      req.user = decoded;
-      return next();
-    }
+    const decoded = jwt.verify(token, config.auth.jwtSecret, {
+      algorithms: ["HS256"],
+    });
 
     if (!decoded.id || !decoded.role) {
       logger.logSecurityEvent({

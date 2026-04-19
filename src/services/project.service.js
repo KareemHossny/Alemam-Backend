@@ -34,7 +34,8 @@ const getAssignedProjects = async ({ userId, assignmentField, populateUsers, err
       query = query.populate("engineers", "name email").populate("supervisors", "name email");
     }
 
-    return await query.lean();
+    const projects = await query.lean();
+    return Array.isArray(projects) ? projects : [];
   } catch (error) {
     AppError.rethrow(error, errorMessage);
   }
@@ -84,7 +85,8 @@ const createProject = async ({ name, scopeOfWork, engineers, supervisors }, acto
 
 const getAllProjects = async () => {
   try {
-    return await populateProjectQuery(Project.find());
+    const projects = await populateProjectQuery(Project.find());
+    return Array.isArray(projects) ? projects : [];
   } catch (error) {
     AppError.rethrow(error, "Error fetching projects");
   }
