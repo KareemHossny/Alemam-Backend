@@ -103,6 +103,12 @@ exports.getCurrentAdminUser = asyncHandler(async (req, res) => {
   return sendSuccess(res, result.user, result.message);
 });
 
+exports.getDashboardStats = asyncHandler(async (req, res) => {
+  const result = await statsService.getAdminDashboardStats();
+  const { data, message } = extractResultPayload(result, "Admin dashboard stats fetched successfully");
+  return sendSuccess(res, data, message);
+});
+
 exports.createProject = asyncHandler(async (req, res) => {
   const result = await projectService.createProject(req.validated.body, req.user);
   const { data, message } = extractResultPayload(result, "Project created successfully");

@@ -6,7 +6,7 @@ const { authorizeRoles } = require("../src/core/middleware/authorize");
 const { authRateLimiters } = require("../middlewares/authRateLimit");
 const validate = require("../src/core/middleware/validate");
 const { bootstrapAdminSchema, loginSchema, logoutSchema, currentUserSchema } = require("../src/validators/auth.validator");
-const { adminTaskStatsSchema, adminProjectStatsSchema } = require("../src/validators/stats.validator");
+const { dashboardStatsSchema, adminTaskStatsSchema, adminProjectStatsSchema } = require("../src/validators/stats.validator");
 const userRoutes = require("../src/modules/user/user.routes");
 const {
   createProjectSchema,
@@ -29,6 +29,7 @@ router.use(authorizeRoles("admin"));
 
 // Users Management
 router.get("/me", validate(currentUserSchema), adminController.getCurrentAdminUser);
+router.get("/stats", validate(dashboardStatsSchema), adminController.getDashboardStats);
 router.use("/users", userRoutes);
 
 // Projects Management

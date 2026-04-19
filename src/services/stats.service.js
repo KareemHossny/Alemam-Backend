@@ -338,6 +338,41 @@ const getAdminTaskStats = async (filters = {}) => {
   }
 };
 
+const getAdminDashboardStats = async () => {
+  try {
+    const [
+      totalUsers,
+      totalProjects,
+      totalEngineers,
+      totalSupervisors,
+      totalDailyTasks,
+      totalMonthlyTasks,
+    ] = await Promise.all([
+      User.countDocuments(),
+      Project.countDocuments(),
+      User.countDocuments({ role: "engineer" }),
+      User.countDocuments({ role: "supervisor" }),
+      DailyTask.countDocuments(),
+      MonthlyTask.countDocuments(),
+    ]);
+
+    return {
+      message: "Admin dashboard stats fetched successfully",
+      data: {
+        totalUsers,
+        totalProjects,
+        totalTasks: totalDailyTasks + totalMonthlyTasks,
+        totalDailyTasks,
+        totalMonthlyTasks,
+        totalEngineers,
+        totalSupervisors,
+      },
+    };
+  } catch (error) {
+    AppError.rethrow(error, "Error fetching admin dashboard stats");
+  }
+};
+
 const getAdminProjectStats = async (projectId, filters = {}) => {
   try {
     const project = await Project.findById(projectId).select("name scopeOfWork").lean();
@@ -461,6 +496,7 @@ const getSupervisorProjectStats = async (user) => {
 };
 
 module.exports = {
+  getAdminDashboardStats,
   getAdminTaskStats,
   getAdminProjectStats,
   getEngineerDashboardStats,
